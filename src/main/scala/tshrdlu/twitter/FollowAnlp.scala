@@ -2,6 +2,9 @@ package tshrdlu.twitter
 
 import twitter4j._
 
+/**
+ * Follow all users of {@literal@}appliednlp with usernames ending in "_anlp".
+ */
 object FollowAnlp extends TwitterInstance with StreamInstance{
 
   def main(args: Array[String]) {
