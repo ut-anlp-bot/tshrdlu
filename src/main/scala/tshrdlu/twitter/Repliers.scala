@@ -65,7 +65,7 @@ extends StatusReplier with DirectMessageReplier {
 class SudoReplier(master: BotMaster)
 extends StatusReplier with DirectMessageReplier {
 
-  lazy val MakeSandwichRE = """(?i)(?:.*(\bsudo\b))?.*\bmake me an?\b.*\bsandwich\b.*""".r
+  lazy val MakeSandwichRE = """(?i)(?:.*(\bsudo\b))?.*\bmake (?:me )?an?\b.*\bsandwich\b.*""".r
 
   def attemptStatusReply(status: Status): Option[String] = {
     return getReply(status.getText)
