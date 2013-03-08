@@ -89,6 +89,9 @@ extends StatusReplier with DirectMessageReplier {
   }
 }
 
+/** A replier that uses the tweets from Users who have tweeted "quotes" about various topics".
+  * The idea is that quotes are very much addressed at humans and makes it sound more human
+  */
 
   class WisdomReplier(master:BotMaster)
   extends StatusReplier with DirectMessageReplier 
@@ -99,8 +102,6 @@ extends StatusReplier with DirectMessageReplier {
 
     lazy val stopwords = Source.fromFile("src/main/resources/lang/eng/lexicon/stopwordsWisdom").getLines().toSet
 
-   // Recognize a follow command
-    lazy val FollowRE = """(?i)(?<=follow)(\s+(me|@[a-z_0-9]+))+""".r
 
   // Pull just the lead mention from a tweet.
     lazy val StripLeadMentionRE = """(?:)^@[a-z_0-9]+\s(.*)$""".r
@@ -108,28 +109,36 @@ extends StatusReplier with DirectMessageReplier {
   // Pull the RT and mentions from the front of a tweet.
     lazy val StripMentionsRE = """(?:)(?:RT\s)?(?:(?:@[a-z]+\s))+(.*)$""".r
 
+    // this will initialize the userList by searching for users with the name "quote"
+
     val userList = userSearch("quote",master.twitter)
 
-
+    /*Initliaze the userList
+     * The number of users is hardcoded for now, to 20.
+     */
   def userSearch(searchWith:String, twitter:Twitter) :ArrayBuffer[String] = 
   {
     var userList = ArrayBuffer[(String,Int)]()
     println("Initializing Wisdom Replier");
     for(page<- 1 to 30)
-    {
-      print(100*page*1.0/30 + "%....." ) 
+    { 
       val temp = master.twitter.searchUsers(searchWith,page);
-      userList = userList ++ temp.map(x=> (x.getScreenName,x.getFollowersCount))
+      userList = userList ++ temp.map(x=> (x.getScreenName,x.getStatusesCount))
     }
 
-    val a = userList.sortBy(x=>x._2).reverse.map(x=> x._1).slice(0,20)
+    println("Bot ready");
+
+    val a = userList.map(x=> x._1).slice(0,30)
     println(a);
     a
 
   }
 
 
-  def attemptStatusReply(status:Status) :Option[String] ={
+  def attemptStatusReply(status:Status) :Option[String] =
+  {
+    if(Math.random < 0.7) None
+    else
     return getReply(status.getText)
   }
 
@@ -138,6 +147,7 @@ extends StatusReplier with DirectMessageReplier {
     return getReply(directMessage.getText)
   }
 
+  // Generates the reply that has to be sent out
   private def getReply(s:String) : Option[String] = 
   {
     val text = s.toLowerCase
@@ -156,9 +166,13 @@ extends StatusReplier with DirectMessageReplier {
         .take(3)
         .toList//.flatMap(w => twitter.search(new Query(w)).getTweets)
         // the one above is a list of tokens
-        val candidateTweets = userList.map(x=> master.twitter.search(new Query("from:"+x)).getTweets).flatten;
         
-        println("candidtae Tweets size is " + candidateTweets.length);
+        //Get the tweets from the users mentioned in userList.This will return only a few tweets , per user
+        // the Limit is around 200 / user and need to figure out how to set it to the maximum
+
+        val candidateTweets = userList.map(x=> master.twitter.getUserTimeline(x,new Paging(1,50))).flatten;
+        
+        println("candidate Tweets size is " + candidateTweets.length);
         
         val candidateTweetsText = candidateTweets.map(x=> x.getText).toSeq
         val reply = generateReply(candidateTweetsText,statusList)
@@ -176,9 +190,12 @@ extends StatusReplier with DirectMessageReplier {
     
   
 
+    // take a List of tweets , and return the one that is most relevanr
+    // Here relevance is just based on matching a word from the original tweet
+    // to the tweets to be searched. In the future need to implement other things
+    // Bigram , or other similarity measure between tweets can be used
 
   def generateReply(statusList:Seq[String],tweet : Seq[String]) = {
-
     val processedCandidates = statusList.map(x=> normalize(x))
 
     val filterCandidates:Seq[String] = processedCandidates.map {
@@ -190,37 +207,30 @@ extends StatusReplier with DirectMessageReplier {
     .filter(tshrdlu.util.English.isSafe) 
     .filter(tshrdlu.util.English.isEnglish)
 
-
-
-    //println("filtered candidiates" + filterCandidates)
-
-
     val potentialResponse= filterCandidates.map(x=> (x,score(x,tweet)) ).sortBy(x=>x._2).reverse(0)
-
     if(potentialResponse._2 == 0) "#@" else potentialResponse._1;
 
   }
 
 
-  
+  // Score is just based on how many words in the original tweet matches the candidates
+  // It does not match stopwords , as they never really give any information regarding
+  // the content of the tweet
+
   def score(x: String , tweet:Seq[String])=
   {
     val candidate = SimpleTokenizer(x).filter(x=> stopwords.contains(x) == false).toSet
-    
-
-
     val score = tweet.map(x=> if(candidate.contains(x)) 1 else 0 ).sum
     println("size is  " + candidate.size + "and score is " + score);
     score
   }
 
+  // Just extract the content part of the quote , omit 
+  // things like who said and etc.
   def normalize(sentence:String):String  = {
     val normalizedSentence = if(sentence.startsWith("\"")) (sentence.split("\""))(1) 
     else if(sentence.startsWith("\'")) (sentence.split("\'"))(1)
     else (sentence.split("-"))(0)
-    
-
-
     normalizedSentence
 
   }
