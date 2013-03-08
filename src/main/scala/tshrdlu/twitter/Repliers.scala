@@ -87,3 +87,99 @@ extends StatusReplier with DirectMessageReplier {
   }
 
 }
+class BigramImplementation(master: BotMaster)
+extends StatusReplier with DirectMessageReplier {
+
+    import tshrdlu.util.SimpleTokenizer
+    import collection.JavaConversions._
+
+    val username = master.twitter.getScreenName
+
+    lazy val stopwords = tshrdlu.util.English.stopwords_bot
+    // Recognize a follow command
+    lazy val FollowRE = """(?i)(?<=follow)(\s+(me|@[a-z_0-9]+))+""".r
+
+    // Pull just the lead mention from a tweet.
+    lazy val StripLeadMentionRE = """(?:)^@[a-z_0-9]+\s(.*)$""".r
+
+    // Pull the RT and mentions from the front of a tweet.
+    lazy val StripMentionsRE = """(?:)(?:RT\s)?(?:(?:@[a-z]+\s))+(.*)$""".r 
+    def attemptStatusReply(status: Status): Option[String] = {
+    return getReply(status.getText)
+   }  
+
+   def attemptDirectMessageReply(directMessage: DirectMessage): Option[String] = {
+    return getReply(directMessage.getText)
+  }
+
+   private def getReply(text: String): Option[String] = {
+    if(!(text.contains("?")||text.startsWith("Who")||text.startsWith("Where")||text.startsWith("Why")||text.startsWith("How")||text.startsWith("When")||text.startsWith("Which")))
+    return None
+    val newtext = text.toLowerCase    
+        try {
+          val StripLeadMentionRE(withoutMention) = newtext
+          val bigram = Tokenize(withoutMention)
+          .sliding(2)
+          .flatMap{case Vector(x,y) => List(x+" "+y)}
+          //.filterNot(z => (stopwords.contains(z(0))||stopwords.contains(z(1))))
+          .toList
+          .sortBy(_.length)
+         // bigram.foreach(println)
+          //println(bigram.takeRight(3))
+          val bigramsearch= bigram
+              .takeRight(3)
+              .toList
+              .flatMap(w => master.twitter.search(new Query("\""+w+"\"")).getTweets)
+        
+              val reply = extractText(bigramsearch,bigram.toList)
+              Some(reply)
+              } catch { 
+                  case _: Throwable => val reply = None
+                  None
+        }
+  }
+    def extractText(statusList: List[Status],bigram:List[String]):String = {
+      val useableTweets = statusList
+        .map(_.getText)
+        .map {
+    case StripMentionsRE(rest) => rest
+    case x => x
+        }
+        .filterNot(_.contains('@'))
+        .filterNot(_.contains('/'))
+        .filter(tshrdlu.util.English.isEnglish)
+        .filter(tshrdlu.util.English.isSafe)
+      if (useableTweets.isEmpty) "NO." else
+        { 
+        val bigramMap = useableTweets.flatMap{x =>Tokenize(x)
+          .sliding(2)
+          .filterNot(z => (stopwords.contains(z(0))||stopwords.contains(z(1))))
+          .map(bg => bg.mkString(" ") -> x)} toMap
+        val sortedMap = bigramMap.filter{case (x,y) => bigram.contains(x)}
+        val mostRelevantTweet = sortedMap
+        .groupBy(_._2)
+        .maxBy(_._2.size)
+        val found = for {
+            rb <- bigram
+            sentence <- bigramMap get rb
+            } yield sentence
+
+      //sortedMap foreach {case (key, value) => println (key + "-->" + value)}
+      //println(mostRelevantTweet)
+      if (!mostRelevantTweet._2.isEmpty)
+          mostRelevantTweet._1
+          else
+            found.headOption.get
+      }
+    }
+    def Tokenize(text: String): IndexedSeq[String]={
+      val starts = """(?:[#@])|\b(?:http)"""
+      text
+      .replaceAll("""([\?!()\";\|\[\].,':])""", " $1 ")
+      .trim
+      .split("\\s+")
+      .toIndexedSeq
+      .filterNot(x => x.startsWith(starts))
+  }
+}
+
