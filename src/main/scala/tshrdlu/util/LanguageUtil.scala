@@ -63,6 +63,7 @@ abstract class Language(code: String) {
 object English extends Language("eng") {
   lazy val stopwords = getLexicon("stopwords.english")
   lazy val vulgar = getLexicon("vulgar.txt.gz")
+  lazy val stopwords_bot = getLexicon("stopwords.bot")
   lazy val vocabulary = getLexicon("masc_vocab.txt.gz") ++ stopwords
 
   def isEnglish(text: String) = {
