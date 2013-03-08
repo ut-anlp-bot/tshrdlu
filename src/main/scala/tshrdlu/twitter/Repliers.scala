@@ -27,3 +27,36 @@ class AliveDirectMessageReplier(master: BotMaster) extends DirectMessageReplier 
     if (directMessage.getText.matches("""(?i).*\bare you alive\?.*""")) Some("yes") else None
   }
 }
+
+
+/**
+ * A replier for status and direct messages. Responds to requests to make
+ * sandwiches.
+ *
+ * @see <a href="http://xkcd.com/149/">http://xkcd.com/149/</a>
+ */
+class SudoReplier(master: BotMaster)
+extends StatusReplier with DirectMessageReplier {
+
+  lazy val MakeSandwichRE = """(?i)(?:.*(\bsudo\b))?.*\bmake me a\b.*\bsandwich\b.*""".r
+
+  def attemptStatusReply(status: Status): Option[String] = {
+    return getReply(status.getText)
+  }
+
+  def attemptDirectMessageReply(directMessage: DirectMessage): Option[String] = {
+    return getReply(directMessage.getText)
+  }
+
+  private def getReply(text: String): Option[String] = {
+    val reply = text match {
+      case MakeSandwichRE(sudo) => {
+        if (sudo == null) Some("What? Make it yourself.") else Some("Okay.")
+      }
+      case _ => None
+    }
+
+    return reply
+  }
+
+}
