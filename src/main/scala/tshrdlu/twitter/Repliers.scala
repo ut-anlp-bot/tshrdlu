@@ -279,13 +279,13 @@ extends StatusReplier with DirectMessageReplier {
               .flatMap(w => master.twitter.search(new Query("\""+w+"\"")).getTweets)
         
               val reply = extractText(bigramsearch,bigram.toList)
-              Some(reply)
+              reply
               } catch { 
                   case _: Throwable => val reply = None
                   None
         }
   }
-    def extractText(statusList: List[Status],bigram:List[String]):String = {
+    def extractText(statusList: List[Status],bigram:List[String]): Option[String] = {
       val useableTweets = statusList
         .map(_.getText)
         .map {
@@ -296,7 +296,7 @@ extends StatusReplier with DirectMessageReplier {
         .filterNot(_.contains('/'))
         .filter(tshrdlu.util.English.isEnglish)
         .filter(tshrdlu.util.English.isSafe)
-      if (useableTweets.isEmpty) "NO." else
+      if (useableTweets.isEmpty) None else
         { 
         val bigramMap = useableTweets.flatMap{x =>Tokenize(x)
           .sliding(2)
@@ -312,9 +312,9 @@ extends StatusReplier with DirectMessageReplier {
             } yield sentence
 
       if (!mostRelevantTweet._2.isEmpty)
-          mostRelevantTweet._1
+          Some(mostRelevantTweet._1)
           else
-            found.headOption.get
+            Some(found.headOption.get)
       }
     }
     def Tokenize(text: String): IndexedSeq[String]={
