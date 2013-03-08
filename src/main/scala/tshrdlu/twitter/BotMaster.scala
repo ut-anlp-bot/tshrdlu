@@ -148,9 +148,18 @@ object BotMaster {
     master.addDirectMessageReplier(sudoReplier)
     master.addAtReplyStatusReplier(sudoReplier)
 
+    val wisdomReplier = new WisdomReplier(master)
+    master.addDirectMessageReplier(wisdomReplier)
+    master.addAtReplyStatusReplier(wisdomReplier)
+
     val defaultReplier = new DefaultReplier(master)
     master.addDirectMessageReplier(defaultReplier)
     master.addAtReplyStatusReplier(defaultReplier)
+
+
+   
+
+
   }
 
 }
