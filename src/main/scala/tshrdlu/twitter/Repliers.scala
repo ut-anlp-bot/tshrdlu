@@ -120,7 +120,7 @@ extends StatusReplier with DirectMessageReplier {
   {
     var userList = ArrayBuffer[(String,Int)]()
     println("Initializing Wisdom Replier");
-    for(page<- 1 to 30)
+    for(page<- 1 to 10)
     { 
       val temp = master.twitter.searchUsers(searchWith,page);
       userList = userList ++ temp.map(x=> (x.getScreenName,x.getStatusesCount))
@@ -128,7 +128,7 @@ extends StatusReplier with DirectMessageReplier {
 
     println("Bot ready");
 
-    val a = userList.map(x=> x._1).slice(0,30)
+    val a = userList.map(x=> x._1).slice(0,15)
     println(a);
     a
 
@@ -170,7 +170,7 @@ extends StatusReplier with DirectMessageReplier {
         //Get the tweets from the users mentioned in userList.This will return only a few tweets , per user
         // the Limit is around 200 / user and need to figure out how to set it to the maximum
 
-        val candidateTweets = userList.map(x=> master.twitter.getUserTimeline(x,new Paging(1,50))).flatten;
+        val candidateTweets = userList.map(x=> master.twitter.getUserTimeline(x,new Paging(1,20))).flatten;
         
         println("candidate Tweets size is " + candidateTweets.length);
         
@@ -270,11 +270,9 @@ extends StatusReplier with DirectMessageReplier {
           val bigram = Tokenize(withoutMention)
           .sliding(2)
           .flatMap{case Vector(x,y) => List(x+" "+y)}
-          //.filterNot(z => (stopwords.contains(z(0))||stopwords.contains(z(1))))
+          .filterNot(z => (stopwords.contains(z(0))||stopwords.contains(z(1))))
           .toList
           .sortBy(_.length)
-         // bigram.foreach(println)
-          //println(bigram.takeRight(3))
           val bigramsearch= bigram
               .takeRight(3)
               .toList
@@ -313,8 +311,6 @@ extends StatusReplier with DirectMessageReplier {
             sentence <- bigramMap get rb
             } yield sentence
 
-      //sortedMap foreach {case (key, value) => println (key + "-->" + value)}
-      //println(mostRelevantTweet)
       if (!mostRelevantTweet._2.isEmpty)
           mostRelevantTweet._1
           else
