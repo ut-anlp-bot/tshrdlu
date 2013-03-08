@@ -147,6 +147,10 @@ object BotMaster {
     val sudoReplier = new SudoReplier(master)
     master.addDirectMessageReplier(sudoReplier)
     master.addAtReplyStatusReplier(sudoReplier)
+
+    val defaultReplier = new DefaultReplier(master)
+    master.addDirectMessageReplier(defaultReplier)
+    master.addAtReplyStatusReplier(defaultReplier)
   }
 
 }

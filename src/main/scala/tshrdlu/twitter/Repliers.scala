@@ -30,6 +30,33 @@ class AliveDirectMessageReplier(master: BotMaster) extends DirectMessageReplier 
 
 
 /**
+ * A default replier when the bot has nothing interesting to say.
+ */
+class DefaultReplier(master: BotMaster)
+extends StatusReplier with DirectMessageReplier {
+
+  lazy val defaultReplies = Vector(
+    "That does not interest me",
+    "I really don't care about that",
+    "Can we talk about something else?",
+    "Let's talk about something else")
+
+  def attemptStatusReply(status: Status): Option[String] = {
+    return getReply(status.getText)
+  }
+
+  def attemptDirectMessageReply(directMessage: DirectMessage): Option[String] = {
+    return getReply(directMessage.getText)
+  }
+
+  private def getReply(text: String): Option[String] = {
+    return Some(defaultReplies(scala.util.Random.nextInt(defaultReplies.length)))
+  }
+
+}
+
+
+/**
  * A replier for status and direct messages. Responds to requests to make
  * sandwiches.
  *
