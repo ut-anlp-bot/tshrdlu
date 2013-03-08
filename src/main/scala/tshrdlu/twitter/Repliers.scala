@@ -97,7 +97,7 @@ extends StatusReplier with DirectMessageReplier {
     import tshrdlu.util.SimpleTokenizer
     import collection.JavaConversions._
 
-    lazy val stopwords = Source.fromFile("stopwords").getLines().toSet
+    lazy val stopwords = Source.fromFile("src/main/resources/lang/eng/lexicon/stopwordsWisdom").getLines().toSet
 
    // Recognize a follow command
     lazy val FollowRE = """(?i)(?<=follow)(\s+(me|@[a-z_0-9]+))+""".r
@@ -162,9 +162,12 @@ extends StatusReplier with DirectMessageReplier {
         
         val candidateTweetsText = candidateTweets.map(x=> x.getText).toSeq
         val reply = generateReply(candidateTweetsText,statusList)
-        Some(reply)
+	
+	if(reply.equals("#@"))
+		None
+	else
+		Some(reply)
 
-        //extractText(statusList)
       }
       catch { 
         case  e : Throwable => println(e);None
@@ -194,7 +197,7 @@ extends StatusReplier with DirectMessageReplier {
 
     val potentialResponse= filterCandidates.map(x=> (x,score(x,tweet)) ).sortBy(x=>x._2).reverse(0)
 
-    if(potentialResponse._2 == 0) "I pass" else potentialResponse._1;
+    if(potentialResponse._2 == 0) "#@" else potentialResponse._1;
 
   }
 
