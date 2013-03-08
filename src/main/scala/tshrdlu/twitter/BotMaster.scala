@@ -148,6 +148,10 @@ object BotMaster {
     master.addDirectMessageReplier(sudoReplier)
     master.addAtReplyStatusReplier(sudoReplier)
 
+    val bigramImplementation = new BigramImplementation(master)
+    master.addAtReplyStatusReplier(bigramImplementation)
+    master.addAtReplyStatusReplier(bigramImplementation)
+    
     val defaultReplier = new DefaultReplier(master)
     master.addDirectMessageReplier(defaultReplier)
     master.addAtReplyStatusReplier(defaultReplier)
