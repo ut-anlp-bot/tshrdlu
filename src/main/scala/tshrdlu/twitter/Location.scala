@@ -16,6 +16,19 @@ object LocationResolver {
 }
 
 
+/**
+ * An actor that attempts to resolve objects such as tweets and Twitter users
+ * to a latitude and longitude. Tries to reply to messages with an
+ * Option[LocationResolver.LocationConfidence] which has a value if a location
+ * was found.
+ *
+ * In some cases, it relies on calls to the GeoNames API to attempt to resolve
+ * the location, so it's best not to overwhelm it (i.e., don't try to resolve
+ * locations for more than a handful of tweets).
+ *
+ * @param geoNamesUsername a geonames.org username
+ * @see <a href="http://www.geonames.org">GeoNames Website</a>
+ */
 class LocationResolver(geoNamesUsername: String) extends Actor with ActorLogging {
   import LocationResolver._
   import akka.pattern.ask
@@ -30,6 +43,7 @@ class LocationResolver(geoNamesUsername: String) extends Actor with ActorLogging
   var geonames: ActorRef = null
 
   override def preStart {
+    // Create the child GeoNames actor
     val props = Props(new GeoNames(geoNamesUsername))
     geonames = context.system.actorOf(props, name = "GeoNames")
   }
@@ -46,7 +60,10 @@ class LocationResolver(geoNamesUsername: String) extends Actor with ActorLogging
       loc pipeTo sender
   }
 
-  def locateStatus(status: Status): Future[Option[LocationConfidence]] = {
+  // Attempts to get a GeoLocation attached to a tweet. If the tweet does not
+  // have an attached location, it tries to resolve a location based on the
+  // location string in the user's profile.
+  private def locateStatus(status: Status): Future[Option[LocationConfidence]] = {
     Option(status.getGeoLocation) match {
       case Some(geo) =>
         Future(Some(new LocationConfidence(geo.getLatitude, geo.getLongitude, 1.0)))
@@ -58,7 +75,9 @@ class LocationResolver(geoNamesUsername: String) extends Actor with ActorLogging
     }
   }
 
-  def locateUser(user: User): Future[Option[LocationConfidence]] = {
+  // Attempts to resolve the location string in the user's profile to a
+  // latitude and longitude.
+  private def locateUser(user: User): Future[Option[LocationConfidence]] = {
     val profileLocation = user.getLocation
     if (!profileLocation.isEmpty) {
       (geonames ? new LocatePlaceByName(profileLocation)).mapTo[Option[LocationConfidence]]
@@ -69,6 +88,10 @@ class LocationResolver(geoNamesUsername: String) extends Actor with ActorLogging
 }
 
 
+/**
+ * An actor that wraps the GeoNames API so only one thing accesses it at a
+ * time.
+ */
 class GeoNames(username: String) extends Actor with ActorLogging {
   import org.geonames
   import LocationResolver.{LocatePlaceByName, LocationConfidence}
