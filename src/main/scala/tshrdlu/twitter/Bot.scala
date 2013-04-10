@@ -63,16 +63,17 @@ class Bot extends Actor with ActorLogging {
   val twitter = new TwitterFactory().getInstance
   val replierManager = context.actorOf(Props[ReplierManager], name = "ReplierManager")
 
-  val streamReplier = context.actorOf(Props[StreamReplier], name = "StreamReplier")
-  val synonymReplier = context.actorOf(Props[SynonymReplier], name = "SynonymReplier")
-  val synonymStreamReplier = context.actorOf(Props[SynonymStreamReplier], name = "SynonymStreamReplier")
-  val bigramReplier = context.actorOf(Props[BigramReplier], name = "BigramReplier")
+ // val streamReplier = context.actorOf(Props[StreamReplier], name = "StreamReplier")
+ // val synonymReplier = context.actorOf(Props[SynonymReplier], name = "SynonymReplier")
+  //val synonymStreamReplier = context.actorOf(Props[SynonymStreamReplier], name = "SynonymStreamReplier")
+  //val bigramReplier = context.actorOf(Props[BigramReplier], name = "BigramReplier")
+  val geoReplier = context.actorOf(Props[GeoReplier], name = "GeoReplier")
 
   override def preStart {
-    replierManager ! RegisterReplier(streamReplier)
-    replierManager ! RegisterReplier(synonymReplier)
-    replierManager ! RegisterReplier(synonymStreamReplier)
-    replierManager ! RegisterReplier(bigramReplier)
+  //  replierManager ! RegisterReplier(streamReplier)
+   // replierManager ! RegisterReplier(synonymReplier)
+    //replierManager ! RegisterReplier(synonymStreamReplier)
+    replierManager ! RegisterReplier(geoReplier)
   }
 
   def receive = {
