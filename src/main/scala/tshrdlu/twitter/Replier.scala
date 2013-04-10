@@ -438,15 +438,15 @@ class GeoReplier extends BaseReplier {
     val trend = Array(trending)
     twitterStream.addListener(simpleStatusListener)
     val filterQuery = new FilterQuery()
-    //filterQuery.locations(Array(Array(longitude-0.05, latitude-0.05), Array(longitude+0.05, latitude+0.05)))
+    filterQuery.locations(Array(Array(longitude-1, latitude-1), Array(longitude+1, latitude+1)))
     filterQuery.track(trend)
     twitterStream.filter(filterQuery) 
     /**
     * Collect filtered tweets useful for sentence generation
     */
-    while(numTweetsSeen < 20){
+    while(numTweetsSeen < 10){
+      Thread.sleep(1000)
       println(numTweetsSeen)
-      ;
     }
     println(trending)
     twitterStream.cleanUp
