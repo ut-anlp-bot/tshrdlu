@@ -42,7 +42,7 @@ EOF
 CLASS=
 
 case $CMD in
-    bot) CLASS=tshrdlu.twitter.Bot; shift;;
+    bot) CLASS=tshrdlu.twitter.Bot;
     run) CLASS=$1; shift;;
     real_fake) CLASS=tshrdlu.classify.app.RealFake;;
     convert_real_fake) CLASS=tshrdlu.classify.app.ConvertRealFake;;
