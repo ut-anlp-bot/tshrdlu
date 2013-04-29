@@ -369,7 +369,7 @@ class BigramReplier extends BaseReplier {
 /**
  * An actor that constructs replies to a given status.
  */
-class GeoReplier extends BaseReplier {
+class GeoReplier(locResolver: ActorRef) extends BaseReplier {
   import Bot._
   import LocationResolver._
   import TwitterRegex._
@@ -398,7 +398,7 @@ class GeoReplier extends BaseReplier {
     * Try to fetch the user's Location
     */
 
-    val locResolver = context.actorFor("akka://TwitterBot/user/LocationResolver")
+    //val locResolver = context.actorFor("akka://TwitterBot/user/LocationResolver")
     val locationResolver = (locResolver ? LocateStatus(status)).mapTo[Option[LocationConfidence]]
     val result = Await.result(locationResolver, 5.seconds).asInstanceOf[Option[LocationConfidence]] 
     result match {
