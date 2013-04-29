@@ -69,15 +69,18 @@ class Bot extends Actor with ActorLogging {
 
 
   // Attempt to create the LocationResolver actor
-  context.actorFor("akka://TwitterBot/user/LocationResolver") ! Kill
-  Option(System.getenv("TSHRDLU_GEONAMES_USERNAME")) match {
-    case Some(geoNamesUsername) =>
-      val locProps = Props(new LocationResolver(geoNamesUsername))
-      context.system.actorOf(locProps, name = "LocationResolver")
-    case None =>
-      log.warning("Environment variable TSHRDLU_GEONAMES_USERNAME not set. " +
-                  "LocationResolver will not be available.")
-  }
+  //context.actorFor("akka://TwitterBot/user/LocationResolver")
+  //Option(System.getenv("TSHRDLU_GEONAMES_USERNAME")) match {
+  //  case Some(geoNamesUsername) =>
+  //    val locProps = Props(new LocationResolver(geoNamesUsername))
+  //    context.system.actorOf(locProps, name = "LocationResolver")
+  //  case None =>
+  //    log.warning("Environment variable TSHRDLU_GEONAMES_USERNAME not set. " +
+  //                "LocationResolver will not be available.")
+  //}
+  val geoNamesUsername = System.getenv("TSHRDLU_GEONAMES_USERNAME")
+  val locProps = Props(new LocationResolver(geoNamesUsername))
+  val locationResolver = context.system.actorOf(locProps, name = "LocationResolver")
 
 /*
   val streamReplier = context.actorOf(Props[StreamReplier], name = "StreamReplier")
@@ -89,7 +92,12 @@ class Bot extends Actor with ActorLogging {
   val chunkReplier = context.actorOf(Props[ChunkReplier], name = "ChunkReplier")
   val sudoReplier = context.actorOf(Props[SudoReplier], name = "SudoReplier")
   val twssReplier = context.actorOf(Props[TWSSReplier], name = "TWSSReplier")
- */ val geoReplier = context.actorOf(Props[GeoReplier], name = "GeoReplier")
+<<<<<<< HEAD
+ */ //val geoReplier = context.actorOf(Props[GeoReplier], name = "GeoReplier")
+
+  val geoProps = Props(new GeoReplier(locationResolver))
+  val geoReplier = context.actorOf(geoProps, name = "GeoReplier")
+
 
   override def preStart {
 /*    replierManager ! RegisterReplier(streamReplier)

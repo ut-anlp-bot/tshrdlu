@@ -370,7 +370,7 @@ class BigramReplier extends BaseReplier {
 /**
  * An actor that constructs replies to a given status.
  */
-class GeoReplier extends BaseReplier {
+class GeoReplier(locResolver: ActorRef)extends BaseReplier {
   import Bot._
   import LocationResolver._
   import TwitterRegex._
@@ -407,7 +407,8 @@ class GeoReplier extends BaseReplier {
     /**
     * Try to fetch the user's Location
     */
-    val locResolver = context.actorFor("akka://TwitterBot/user/LocationResolver")
+
+    //val locResolver = context.actorFor("akka://TwitterBot/user/LocationResolver")
     val locationResolver = (locResolver ? LocateStatus(status)).mapTo[Option[LocationConfidence]]
     val result = Await.result(locationResolver, 15.seconds).asInstanceOf[Option[LocationConfidence]] 
     result match {
@@ -494,8 +495,8 @@ class GeoReplier extends BaseReplier {
     .filterNot(_.contains('/'))
     .filterNot(_.contains(" : "))
     .filter(tshrdlu.util.English.isSafe) 
-    .filter(tshrdlu.util.English.isEnglish).flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$"))
     .map(x => x.replaceAll("""@[A-Za-z]+_?[A-Za-z]*""", "Justin Bieber"))
+    .filter(tshrdlu.util.English.isEnglish).flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$"))
    /*
     if(!trainSet.contains(trending.toLowerCase))
       trendFlag = false
@@ -602,7 +603,7 @@ for((k,v) <- markovMapfwd){
    }
 */
     var replySample = List[String]()
-    for(k <- 1 to 500){  
+    for(k <- 1 to 200){  
       replySample = generateSentence(trending,compreMap,maxLength)::replySample
     }
     
