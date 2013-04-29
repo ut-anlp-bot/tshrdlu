@@ -377,6 +377,11 @@ class GeoReplier extends BaseReplier {
   import tshrdlu.util.SimpleTokenizer
   import twitter4j._
   import scala.util.Random
+  import nak._
+  import nak.NakContext._
+  import nak.core._
+  import nak.data._
+  import nak.liblinear.LiblinearConfig
 
   import java.util.{Timer,TimerTask}
   import java.io.{File, FileWriter,PrintWriter}
@@ -390,6 +395,7 @@ class GeoReplier extends BaseReplier {
   import math.ceil
   import tshrdlu.util._
   import tshrdlu.twitter._
+  import tshrdlu.classify.{BasicRealFakeFeaturizer, ExtendedRealFakeFeaturizer}
   implicit val timeout = Timeout(100 seconds)
   
   /**
@@ -489,7 +495,7 @@ class GeoReplier extends BaseReplier {
     .filterNot(_.contains(" : "))
     .filter(tshrdlu.util.English.isSafe) 
     .filter(tshrdlu.util.English.isEnglish).flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$"))
-    .map(x => x.replaceAll("""\b@[A-Za-z]+[0-9]*[A-Za-z]*\b""", "Justin Bieber"))
+    .map(x => x.replaceAll("""@[A-Za-z]+_?[A-Za-z]*""", "Justin Bieber"))
    /*
     if(!trainSet.contains(trending.toLowerCase))
       trendFlag = false
@@ -575,7 +581,7 @@ for((k,v) <- markovMapfwd){
 }
 */
   val compreMap = (normalizedMap /: markovMap) { case (map, (k,v)) =>
-    map + ( k -> (0.75*v + 0.25*map.getOrElse(k, 0.0)))
+    map + ( k -> (0.70*v + 0.30*map.getOrElse(k, 0.0)))
 }
    /*
     val normalizedMap = markovMap.map{ case (t,u) => 
@@ -596,7 +602,7 @@ for((k,v) <- markovMapfwd){
    }
 */
     var replySample = List[String]()
-    for(k <- 1 to 1000){  
+    for(k <- 1 to 100){  
       replySample = generateSentence(trending,compreMap,maxLength)::replySample
     }
     
@@ -609,8 +615,12 @@ for((k,v) <- markovMapfwd){
     println("************************************")
     sortReply.foreach(println)
     println("************************************")
+    val classifier = NakContext.loadClassifier[FeaturizedClassifier[String,String]]("real_fake.obj")
+    val comparisons = for (ex <- sortReply) yield 
+      classifier.evalRaw(ex)
+    //val predictions, input) = comparisons.unzip3
+    comparisons.map(x => x.toList).foreach(println)
     Future{Seq(sortReply.head)}
-    
     case None => log.info("Couldn't find status location")
         Future{Seq()}
     
@@ -718,7 +728,7 @@ for((k,v) <- markovMapfwd){
         var sampleProbb = wordCount(0)._2
         var indb = 0
         val rand = Random.nextDouble()
-          println(rand + " randombwd")
+          //println(rand + " randombwd")
         while(sampleProbb < rand && wordCount.size >1){
           indb +=1
            if(indb > wordCount.size-1){

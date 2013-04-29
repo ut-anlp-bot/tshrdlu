@@ -32,6 +32,9 @@ tshrdlu 0.1.x commands:
 
   bot           start the bot 
   run           run the main method of a given class
+  real_fake     classify real vs. fake tweets
+  convert_real_fake
+                convert tweets to RealFake dataset
 
 EOF
 }
@@ -41,6 +44,8 @@ CLASS=
 case $CMD in
     bot) CLASS=tshrdlu.twitter.Bot; shift;;
     run) CLASS=$1; shift;;
+    real_fake) CLASS=tshrdlu.classify.app.RealFake;;
+    convert_real_fake) CLASS=tshrdlu.classify.app.ConvertRealFake;;
     help) help; exit 1;;
     *) echo "Unrecognized command: $CMD"; help; exit 1;;
 esac

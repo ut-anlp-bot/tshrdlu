@@ -67,6 +67,18 @@ class Bot extends Actor with ActorLogging {
   val twitter = new TwitterFactory().getInstance
   val replierManager = context.actorOf(Props[ReplierManager], name = "ReplierManager")
 
+
+  // Attempt to create the LocationResolver actor
+  context.actorFor("akka://TwitterBot/user/LocationResolver") ! Kill
+  Option(System.getenv("TSHRDLU_GEONAMES_USERNAME")) match {
+    case Some(geoNamesUsername) =>
+      val locProps = Props(new LocationResolver(geoNamesUsername))
+      context.system.actorOf(locProps, name = "LocationResolver")
+    case None =>
+      log.warning("Environment variable TSHRDLU_GEONAMES_USERNAME not set. " +
+                  "LocationResolver will not be available.")
+  }
+
 /*
   val streamReplier = context.actorOf(Props[StreamReplier], name = "StreamReplier")
   val synonymReplier = context.actorOf(Props[SynonymReplier], name = "SynonymReplier")
@@ -89,7 +101,10 @@ class Bot extends Actor with ActorLogging {
     replierManager ! RegisterReplier(chunkReplier)
     replierManager ! RegisterReplier(sudoReplier)
     replierManager ! RegisterReplier(twssReplier)
-  */  replierManager ! RegisterReplier(geoReplier)
+<<<<<<< HEAD
+  */  
+/*
+  replierManager ! RegisterReplier(geoReplier)
 
     // Attempt to create the LocationResolver actor
     Option(System.getenv("TSHRDLU_GEONAMES_USERNAME")) match {
@@ -100,6 +115,8 @@ class Bot extends Actor with ActorLogging {
         log.warning("Environment variable TSHRDLU_GEONAMES_USERNAME not set. " +
                     "LocationResolver will not be available.")
     }
+*/
+    replierManager ! RegisterReplier(geoReplier)
   }
 
   def receive = {
@@ -137,7 +154,7 @@ class ReplierManager extends Actor with ActorLogging {
   import scala.concurrent.duration._
   import scala.concurrent.Future
   import scala.util.{Success,Failure}
-  implicit val timeout = Timeout(10 seconds)
+  implicit val timeout = Timeout(20 seconds)
 
   lazy val random = new scala.util.Random
 

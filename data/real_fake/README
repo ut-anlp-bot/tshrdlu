@@ -1,0 +1,14 @@
+To create the XML files with labeled tweets, run the following commands from
+the root directory of the project:
+
+for name in train dev test; do
+  tshrdlu convert_real_fake --real data/real_fake/orig/${name}-real.txt --fake data/real_fake/orig/${name}-fake.txt > data/real_fake/${name}.xml
+done
+
+
+Then experiment with classifying them:
+
+tshrdlu real_fake --train data/real_fake/train.xml --eval data/real_fake/dev.xml --extended --cost 0.5
+
+
+To save the classifier, add a "--save path/to/classifier.obj" argument
