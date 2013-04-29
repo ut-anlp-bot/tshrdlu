@@ -3,6 +3,7 @@ package tshrdlu.twitter
 import akka.actor._
 import twitter4j._
 
+
 /**
  * An actor that constructs replies to a given status.
  */
@@ -31,7 +32,7 @@ trait BaseReplier extends Actor with ActorLogging {
   def getReplies(status: Status, maxLength: Int): Future[Seq[String]]
 
 }
-
+/*
 //class GeoLocation(lat:double, lon:double){
 
 //}
@@ -365,7 +366,7 @@ class BigramReplier extends BaseReplier {
   }
 
 }
-
+*/
 /**
  * An actor that constructs replies to a given status.
  */
@@ -386,6 +387,9 @@ class GeoReplier extends BaseReplier {
   import scala.concurrent.Await
   import scala.concurrent.Future
   import tshrdlu.twitter.LocationResolver
+  import math.ceil
+  import tshrdlu.util._
+  import tshrdlu.twitter._
   implicit val timeout = Timeout(100 seconds)
   
   /**
@@ -397,94 +401,250 @@ class GeoReplier extends BaseReplier {
     /**
     * Try to fetch the user's Location
     */
-
     val locResolver = context.actorFor("akka://TwitterBot/user/LocationResolver")
     val locationResolver = (locResolver ? LocateStatus(status)).mapTo[Option[LocationConfidence]]
-    val result = Await.result(locationResolver, 5.seconds).asInstanceOf[Option[LocationConfidence]] 
+    val result = Await.result(locationResolver, 15.seconds).asInstanceOf[Option[LocationConfidence]] 
     result match {
     case Some(loc) => 
     val latitude =loc.latitude
     val longitude = loc.longitude
     log.info("Latitude: " + loc.latitude + ", Longitude: " + loc.longitude + " -- " + loc.confidence)
+    
     val text = stripLeadMention(status.getText).toLowerCase
     val tweetBuffer = collection.mutable.ListBuffer[String]()
     var numTweetsSeen = 0
     def simpleStatusListener = new StatusListener() {
     def onStatus(status: Status) { 
       tweetBuffer += status.getText
-      numTweetsSeen += 1 
+      numTweetsSeen += 1
+      println(status.getText) 
     }
     def onDeletionNotice(statusDeletionNotice: StatusDeletionNotice) {}
     def onTrackLimitationNotice(numberOfLimitedStatuses: Int) {}
-    def onException(ex: Exception) { ex.printStackTrace }
+    def onException(ex: Exception) { ex.printStackTrace 
+    }
     def onScrubGeo(arg0: Long, arg1: Long) {}
     def onStallWarning(warning: StallWarning) {}
     }
 
-    
+    //val botInst = new Bot
     val twitter = new TwitterFactory().getInstance
-    val twitterStream = new TwitterStreamFactory().getInstance
+    //val twitterStream = botInst.streamer.stream
+    //new TwitterStreamFactory().getInstance
    /**
     * Collect Trends closest to the user's Location
     */
+    
+    //val latitude = 30.26
+    //val longitude = -97.74
     val locList = twitter.getClosestTrends(new GeoLocation(latitude,longitude))
     val loctrend = twitter.getPlaceTrends(locList.get(0).getWoeid).getTrends
     var trendList = List[String]()
     for(i <- 0 until loctrend.size){
           trendList = loctrend(i).getName :: trendList
     }
-    val filterTrends = trendList.filterNot(x => x.startsWith("#"))
+    println(trendList)
+    val filterTrends = trendList.filter(x => x.startsWith("#"))
+    //var trendFlag = false
+    //var trending = ""
+    //var trainSet = List[String]()
+
+    //while(trendFlag == false){
     val trending = Random.shuffle(filterTrends).head
+    
+    //println("-------------->>>>"+trending)
+    //if(trending.startsWith("#")) 
+      //trending.slice(1,trending.length-1)
     val trend = Array(trending)
+    val tweetSearch  = twitter.search(new Query("\""+trending+"\"")).getTweets
+    var tweetText = List[String]()
+    for(i <-0 to tweetSearch.size-1) 
+      tweetText =  tweetSearch.get(i).getText :: tweetText
+
+    tweetText.foreach(println)
+    /*
+    twitterStream.cleanUp
     twitterStream.addListener(simpleStatusListener)
     val filterQuery = new FilterQuery()
-    filterQuery.locations(Array(Array(longitude-1, latitude-1), Array(longitude+1, latitude+1)))
+    filterQuery.locations(Array(Array(longitude-2, latitude-2), Array(longitude+2, latitude+2)))
+    //println("************")
     filterQuery.track(trend)
-    twitterStream.filter(filterQuery) 
+    twitterStream.getFilterStream(filterQuery) 
     /**
     * Collect filtered tweets useful for sentence generation
     */
-    while(numTweetsSeen < 10){
+    while(numTweetsSeen < 5){
       Thread.sleep(1000)
       println(numTweetsSeen)
     }
     println(trending)
-    twitterStream.cleanUp
     twitterStream.shutdown
-    
-    val trainSet = tweetBuffer.toSeq.map {
+    */
+    val trainSet = tweetText
+        .map {
       case StripMentionsRE(rest) => rest
       case x => x
     }
     .filterNot(_.contains('/'))
-    .filterNot(_.contains('@'))
+    .filterNot(_.contains(" : "))
     .filter(tshrdlu.util.English.isSafe) 
-    .filter(tshrdlu.util.English.isEnglish).flatMap(x => Tokenize("^ "+x))
+    .filter(tshrdlu.util.English.isEnglish).flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$"))
+    .map(x => x.replaceAll("""\b@[A-Za-z]+[0-9]*[A-Za-z]*\b""", "Justin Bieber"))
+   /*
+    if(!trainSet.contains(trending.toLowerCase))
+      trendFlag = false
+    else
+      trendFlag = true
+}
+*/
+    val wordCountOnline = trainSet.toList.groupBy(x=>x).mapValues(x=>x.length).toMap
     val filterTrain = trainSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
     /**
     * Make a Bigram Map of the tweets collected along with their probabilities
     */
-  val markovMap = filterTrain.toList.groupBy(x=>x).mapValues(x=>x.length).toMap
-   val normalizedMap = markovMap.map{ case (t,u) => 
-    val wordList = t.split("\\s+").toList
-    val wordKey = markovMap.filterKeys(p => p.startsWith(wordList(0)+" "))
-    val wordCount = wordKey.foldLeft(0)( (acc, kv) => acc + kv._2)
-    (t -> u/wordCount.toDouble)
-   }
-
-   /**
-    * Merge the original map with the 20 news group tokenized corpus and normalize probabilities
-    */
-    val normalizedNew = scala.io.Source.fromFile("src/main/resources/lang/eng/lexicon/20news_markov.txt").getLines
+  val normalizedNew = scala.io.Source.fromFile("src/main/resources/lang/eng/lexicon/twitterBigramfreq.txt").getLines
     .flatMap(t => t.split("\t") match {
       case Array(str1, str2) => Map(str1 -> str2.toDouble)
   } ) toMap
+  //val markovMap = filterTrain.toList.groupBy(x=>x).mapValues(x=>x.length).toMap
+ //val normalMarkov = markovMap.map(x => (x._1 -> x))
+   val normalizedMap = normalizedNew.toMap
+   /*for((k,v) <- normalizedNews){
+    println(k+" ->"+v)
+   }*/
+   val markovMap = filterTrain.toList.groupBy(x=>x).mapValues(x=>x.length.toDouble).toMap
+   /*
+   val markovMapfwd = markovMap.map{ case (t,u) => 
+   val wordList = t.split("\\s+").toList
+   //val wordKey = markovMap.filter(p => p._1.startsWith(wordList(0)+" "))
+   val wordCount = wordCountOnline.getOrElse(wordList(0),0)
+   //wordKey.foldLeft(0)( (acc, kv) => acc + kv._2)
+   if(wordCount == 0)
+    (t -> u*1.0)
+   //println(wordCount)
+   else
+    (t -> u*1.0/(wordCount.toDouble))
+   }
+   */
+   /*
+for((k,v) <- markovMapfwd){
+    println(k+" ->"+v)
+   }
 
-    val normalizedNews = normalizedNew.toMap
+   val markovMapbwd = markovMap.map{ case (t,u) => 
+   val wordList = t.split("\\s+").toList
+   //val wordKey = markovMap.filter(p => p._1.endsWith(" "+wordList(1)))
+   val wordCount = wordCountOnline.getOrElse(wordList(1),0)
+   //wordKey.foldLeft(0)( (acc, kv) => acc + kv._2)
+   if(wordCount == 0)
+    (t -> u*1.0)
+   //println(wordCount)
+   else
+    (t -> 1.0*u/(wordCount.toDouble))
+   }
+   */
+    //val comblist = markovMap.toList ++ normalizedNews.toList
+    //val compreMap = comblist.groupBy ( _._1) .map { case (k,v) => k -> v.map(_._2).sum }
+   /*
+   val normalizedMapfwd = normalizedNews.map{ case (t,u) => 
+   val wordList = t.split("\\s+").toList
+   val wordKey = markovMap.filter(p => p._1.startsWith(wordList(0)+" "))
+   val wordCount = wordKey.foldLeft(0)( (acc, kv) => acc + kv._2)
+   if(wordCount == 0)
+    (t -> u*1.0)
+    else
+   //println(wordCount)
+    (t -> 1.0*u/(wordCount.toDouble))
+   }
+   */
+   /*
+   val normalizedMapbwd = normalizedNews.map{ case (t,u) => 
+   val wordList = t.split("\\s+").toList
+   val wordKey = markovMap.filter(p => p._1.endsWith(" "+wordList(1)))
+   val wordCount = wordKey.foldLeft(0)( (acc, kv) => acc + kv._2)
+   //println(wordCount)
+   if(wordCount == 0)
+    (t -> u*1.0)
+    else
+  // println(wordCount)
+    (t -> 1.0*u/(wordCount.toDouble))
+   }
 
-    val combList = normalizedMap.toList ++ normalizedNews.toList
-    val compreMap = combList.groupBy ( _._1) .map { case (k,v) => k -> v.map(_._2).sum }
+   val compreMapfwd = (normalizedMapfwd /: markovMapfwd) { case (map, (k,v)) =>
+    map + ( k -> (0.5*v + 0.5*map.getOrElse(k, 0.0)))
+}
+*/
+  val compreMap = (normalizedMap /: markovMap) { case (map, (k,v)) =>
+    map + ( k -> (0.75*v + 0.25*map.getOrElse(k, 0.0)))
+}
+   /*
+    val normalizedMap = markovMap.map{ case (t,u) => 
+    val wordList = t.split("\\s+").toList
+    val wordKey = markovMap.filterKeys(p => p.startsWith(wordList(0)+" "))
+    //val filteredMap = wordKey.map(x => (x._1 -> Math.ceil(x._2).toInt))
+    val wordCount = wordKey.foldLeft(0)( (acc, kv) => acc + kv._2)
+    (t -> u/wordCount.toDouble)
+   }*/
+   /**
+    * Merge the original map with the 20 news group tokenized corpus and normalize probabilities
+    */
+    //val combList = markovMap.toList ++ normalizedNews.toList
+    //val compreMap = combList.groupBy (_._1).map { case (k,v) => k -> v.map(_._2).sum }
+  /*
+  for((k,v) <- normalizedMapfwd){
+    println(k+" ->"+v)
+   }
+*/
+    var replySample = List[String]()
+    for(k <- 1 to 1000){  
+      replySample = generateSentence(trending,compreMap,maxLength)::replySample
+    }
+    
 
+    val genReply = replySample.map(x => postProcess(x))
+    println("************************************")
+    genReply.foreach(println)
+    println("************************************")
+    val sortReply = genReply.sortBy(-_.length).distinct
+    println("************************************")
+    sortReply.foreach(println)
+    println("************************************")
+    Future{Seq(sortReply.head)}
+    
+    case None => log.info("Couldn't find status location")
+        Future{Seq()}
+    
+    }
+
+
+//Future{Seq("newSentence")}
+  }
+  def stringLength(s1:Int,s2:Int) : Int ={
+    s1+s2+1
+  }
+  def postProcess(reply:String): String ={
+    var tempReply = reply(0).toString.toUpperCase + reply.substring(1, reply.length)
+    if(tempReply.contains("."))
+    tempReply = tempReply.slice(0,tempReply.indexOf(".")-1) + tempReply.slice(tempReply.indexOf("."),tempReply.length)
+    if(tempReply.contains("\""))
+    tempReply = tempReply.slice(0,tempReply.indexOf("\"")-1) + tempReply.slice(tempReply.indexOf("\""),tempReply.length)
+    if(tempReply.contains(","))
+    tempReply = tempReply.slice(0,tempReply.indexOf(",")-1) + tempReply.slice(tempReply.indexOf(","),tempReply.length)
+    if(tempReply.contains("!"))
+    tempReply = tempReply.slice(0,tempReply.indexOf("!")-1) + tempReply.slice(tempReply.indexOf("!"),tempReply.length)
+    if(tempReply.contains("?"))
+    tempReply = tempReply.slice(0,tempReply.indexOf("?")-1) + tempReply.slice(tempReply.indexOf("?"),tempReply.length)
+    //if(tempReply.contains("'"))
+    //tempReply = tempReply.slice(0,tempReply.indexOf("'")-1) + tempReply.slice(tempReply.indexOf("'"),tempReply.length)
+    return tempReply
+  }
+
+  def generateSentence(trending:String,compreMap:Map[String,Double],maxLength : Int):String={
+    var limit = true
+    var newSentence = ""
+    var count = 0
+    //while(limit==true){
+    limit = false
     val trendSymbol = trending.split("\\s+").toList
     var startSym = trendSymbol.last.toLowerCase
     var endSym = trendSymbol.head.toLowerCase
@@ -492,52 +652,104 @@ class GeoReplier extends BaseReplier {
     /**
     * Generate sentence going forward and backward starting from a randomly chosen trend in the nearby area
     */
-    var newSentence = trending
+    count = 0
+    println(startSym)
+    newSentence = trending
     var genSentence = ""
     var flag1 = false
     var flag2 = false
     var fwd = true
-
-    while(newSentence.length+symbol.length <=140 && startSym!="." && endSym != "^"){
-      if(fwd == true){
+    var fwdway = true
+    var bwdway = true
+    println(newSentence)
+    while(stringLength(newSentence.length, symbol.length) < maxLength && (fwdway ==true || bwdway ==true) && count < 20){
+      count = count+1
+      //println("length: "+stringLength(newSentence.length, symbol.length))
+      //println(symbol)
+      if(fwd == true && fwdway ==true){
         fwd = false
-        val wordKey = compreMap.filterKeys(p => p.startsWith(startSym+" "))
-        val wordCount = wordKey.toSeq.sortBy(-_._2)
-        val word = wordCount(0)._1.split("\\s+").toList
-         if(flag1 == false)
+        //val fwdSet = compreMapfwd.filterKeys(p => p.startsWith(startSym+" "))
+        //if(fwdSet.isEmpty)
+        //limit = true
+        val wordKey = compreMap.filter(p => p._1.startsWith(startSym+" "))
+        val wordCountOld = wordKey.toSeq.sortBy(-_._2)
+        val total = wordCountOld.map(_._2).sum
+        val wordCount = wordKey.map { v => (v._1 -> v._2*1.0 / total)}.toSeq.sortBy(-_._2)
+       //println(wordCount)
+        val rand = Random.nextDouble()
+       // println(rand + " randomfwd")
+        var sampleProbf = wordCount(0)._2
+        var indf = 0
+        while(sampleProbf < rand && wordCount.size >1){
+          indf +=1
+          if(indf > wordCount.size-1){
+        indf = wordCount.size-1
+        sampleProbf=2
+      }  
+      else
+          sampleProbf+=wordCount(indf)._2     
+        }
+        
+        val word = wordCount(indf)._1.split("\\s+").toList
+        startSym = word(1)
+        if(startSym=="$$"){
+          fwdway = false
+         // if(flag1 == false)
+          //newSentence = newSentence+" "+word(0)
+        }
+        if(flag1 == false)
           flag1 = true
         else
           newSentence = newSentence+" "+word(0)
-        startSym = word(1)
         symbol = startSym
+        //println(symbol)
         println(newSentence)
       }
-      else{
+      else if(bwdway == true){
         fwd = true
-        val wordKey = compreMap.filterKeys(p => p.endsWith(" "+endSym))
-        val wordCount = wordKey.toSeq.sortBy(-_._2)
-        val word = wordCount(0)._1.split("\\s+").toList
-        if(flag2 == false)
+        //val bwdSet = compreMapbwd.filterKeys(p => p.endsWith(" "+endSym))
+        //if(bwdSet.isEmpty)
+        //limit = true
+        val wordKey = compreMap.filter(p => p._1.endsWith(" "+endSym))
+        val wordCountOld = wordKey.toSeq.sortBy(-_._2)
+        val total = wordCountOld.map(_._2).sum
+        val wordCount = wordKey.map { v => (v._1 -> v._2*1.0 / total)}.toSeq.sortBy(-_._2)
+        //println(wordCount)
+        var sampleProbb = wordCount(0)._2
+        var indb = 0
+        val rand = Random.nextDouble()
+          println(rand + " randombwd")
+        while(sampleProbb < rand && wordCount.size >1){
+          indb +=1
+           if(indb > wordCount.size-1){
+        indb = wordCount.size-1 
+        sampleProbb= 2
+      }   
+      else
+          sampleProbb+=wordCount(indb)._2 
+        }
+
+        val word = wordCount(indb)._1.split("\\s+").toList
+      endSym =  word(0)
+      if(endSym == "^"){
+        bwdway = false
+       // if(flag2 == false)
+        //newSentence = word(1)+" "+newSentence
+      }
+      if(flag2 == false)
           flag2 = true
         else
           newSentence = word(1)+" "+newSentence
-      endSym =  word(0)
       symbol = endSym
+      //println(symbol)
       println(newSentence)
       }
-    
     }
-
-    Future{Seq(newSentence)}
-    
-    case None => log.info("Couldn't find status location")
-        Future{Seq()}
-    }
-
-
+    if(fwdway ==true || bwdway == true || count > 5)
+    limit = true
+ // }
+    newSentence
   }
-
-
   def getText(status: Status): Option[String] = {
     import tshrdlu.util.English.{isEnglish,isSafe}
 
@@ -579,6 +791,8 @@ class GeoReplier extends BaseReplier {
     }
   }
 }
+
+/*
 /**
  * An actor that constructs replies to a given status.
  */
@@ -757,3 +971,4 @@ class TWSSReplier extends BaseReplier {
     feature
   }
 }
+*/
