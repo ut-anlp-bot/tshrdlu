@@ -602,7 +602,7 @@ for((k,v) <- markovMapfwd){
    }
 */
     var replySample = List[String]()
-    for(k <- 1 to 100){  
+    for(k <- 1 to 500){  
       replySample = generateSentence(trending,compreMap,maxLength)::replySample
     }
     
@@ -619,8 +619,18 @@ for((k,v) <- markovMapfwd){
     val comparisons = for (ex <- sortReply) yield 
       classifier.evalRaw(ex)
     //val predictions, input) = comparisons.unzip3
-    comparisons.map(x => x.toList).foreach(println)
-    Future{Seq(sortReply.head)}
+    val lenthFilter = sortReply.filter(x => x.length > 40)
+    //print(classifier.labels)
+    val realIndex = classifier.labels.toList.indexOf("real")
+    val results = comparisons.map(x => x.toList)
+    //results.foreach(println)
+    val realList = results.map{x => if(realIndex == 0) x(0)
+      else x(1)}
+    val predictResult = realList.zip(lenthFilter).sortBy(-_._1)
+    val topTen = predictResult.take(10)
+    for(i <- 0 to topTen.length-1)
+      println(topTen(i))
+    Future{Seq(predictResult(0)._2)}
     case None => log.info("Couldn't find status location")
         Future{Seq()}
     
