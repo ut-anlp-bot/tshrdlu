@@ -37,6 +37,7 @@ object Bot {
   case class RegisterReplier(replier: ActorRef)
   case class ReplyToStatus(status: Status)
   case class SearchTwitter(query: Query)
+  case class UserTimeline(screenName: String)
   case class UpdateStatus(update: StatusUpdate)
 
   def main (args: Array[String]) {
@@ -135,7 +136,24 @@ class Bot extends Actor with ActorLogging {
     case SearchTwitter(query) => 
       val tweets: Seq[Status] = twitter.search(query).getTweets.toSeq
       sender ! tweets
-      
+
+    case UserTimeline(screenName) =>
+      val paging = new Paging
+      paging.setCount(200)
+      val tweets: Seq[Status] = try {
+        twitter.getUserTimeline(screenName, paging)
+      } catch {
+        case te: TwitterException =>
+          if (te.getStatusCode == 401) {
+            // This happens when the user's timeline is protected. In this case,
+            // just return an empty sequence and ignore the error
+            Seq()
+          } else {
+            throw te
+          }
+      }
+      sender ! tweets
+
     case UpdateStatus(update) => 
       log.info("Posting update: " + update.getStatus)
       twitter.updateStatus(update)
