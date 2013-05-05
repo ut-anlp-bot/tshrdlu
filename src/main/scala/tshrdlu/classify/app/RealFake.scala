@@ -26,6 +26,7 @@ object RealFake {
       case "unigram" => new NGramFeaturizer(1, "unigram", stopwords = false)
       case "bigram" => new NGramFeaturizer(2, "bigram")
       case "trigram" => new NGramFeaturizer(3, "trigram")
+      case "fractionStopwords" => FractionStopwordsFeaturizer
       case Gappy(gap) => new GappyBigramFeaturizer(gap.toInt)
       case StandardGappy(maxGap) => new StandardGappyBigramFeaturizer(maxGap.toInt)
     }
@@ -96,7 +97,7 @@ object RealFakeOpts {
   import org.rogach.scallop._
 
   def apply(args: Array[String]) = new ScallopConf(args) {
-    val featurizerTypes = Set("unigram", "bigram", "trigram") ++
+    val featurizerTypes = Set("unigram", "bigram", "trigram", "fractionStopwords") ++
       (1 to 10).map("gappy" + _).toSet ++
       (1 to 50).map("standardGappyMax" + _).toSet
 

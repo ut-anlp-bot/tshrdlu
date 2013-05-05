@@ -70,3 +70,16 @@ class StandardGappyBigramFeaturizer(maxGap: Int) extends TweetFeaturizer {
     }.toSeq
   }
 }
+
+object FractionStopwordsFeaturizer extends TweetFeaturizer {
+  def apply(tweet: PreprocessedTweet): Seq[FeatureObservation[String]] = {
+    val numStopwords = tweet.lowerTokens.length - tweet.lowerTokensNoStopwords.length
+    val pattern = "[a-z0-9].*".r.pattern
+    val numContentWords = tweet.lowerTokens.count(pattern.matcher(_).matches)
+    val fractionStopwords = if(numContentWords == 0)
+      0.0
+    else
+      numStopwords.toDouble / numContentWords
+    Seq(FeatureObservation("fraction_stopwords", fractionStopwords))
+  }
+}
