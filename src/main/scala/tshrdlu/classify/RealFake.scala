@@ -83,3 +83,15 @@ object FractionStopwordsFeaturizer extends TweetFeaturizer {
     Seq(FeatureObservation("fraction_stopwords", fractionStopwords))
   }
 }
+
+class FractionDuplicateNGramFeaturizer(n: Int) extends TweetFeaturizer {
+  def apply(tweet: PreprocessedTweet): Seq[FeatureObservation[String]] = {
+    val ngrams = tweet.lowerTokens.sliding(n).filter(_.length == n).toArray
+    val numDups = ngrams.length - ngrams.distinct.length
+    val fraction = if(ngrams.length == 0)
+      0.0
+    else
+      numDups.toDouble / ngrams.length
+    Seq(FeatureObservation("frac_dup_" + n + "_grams", fraction))
+  }
+}

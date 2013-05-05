@@ -20,6 +20,7 @@ object RealFake {
     val evalExamples = readExamples(opts.eval()).toIndexedSeq
 
     // Build the featurizer
+    val FractionDuplicateNGram = """fractionDuplicateNGram(\d+)""".r
     val Gappy = """gappy(\d+)""".r
     val StandardGappy = """standardGappyMax(\d+)""".r
     val featurizers = opts.featurizers().map {
@@ -27,6 +28,7 @@ object RealFake {
       case "bigram" => new NGramFeaturizer(2, "bigram")
       case "trigram" => new NGramFeaturizer(3, "trigram")
       case "fractionStopwords" => FractionStopwordsFeaturizer
+      case FractionDuplicateNGram(n) => new FractionDuplicateNGramFeaturizer(n.toInt)
       case Gappy(gap) => new GappyBigramFeaturizer(gap.toInt)
       case StandardGappy(maxGap) => new StandardGappyBigramFeaturizer(maxGap.toInt)
     }
@@ -98,6 +100,7 @@ object RealFakeOpts {
 
   def apply(args: Array[String]) = new ScallopConf(args) {
     val featurizerTypes = Set("unigram", "bigram", "trigram", "fractionStopwords") ++
+      (1 to 5).map("fractionDuplicateNGram" + _).toSet ++
       (1 to 10).map("gappy" + _).toSet ++
       (1 to 50).map("standardGappyMax" + _).toSet
 
