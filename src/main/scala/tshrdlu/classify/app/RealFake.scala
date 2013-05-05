@@ -1,12 +1,13 @@
 package tshrdlu.classify.app
 
+import scala.util.Random
+
 import nak.NakContext
 import nak.data.Example
 import nak.liblinear
 import nak.util.ConfusionMatrix
 
-import tshrdlu.classify.{BasicRealFakeFeaturizer, ExtendedRealFakeFeaturizer}
-import tshrdlu.classify.XMLLabeledTweetReader
+import tshrdlu.classify._
 
 
 object RealFake {
@@ -15,29 +16,39 @@ object RealFake {
     val opts = RealFakeOpts(args)
 
     // Read the datasets
-    val trainExamples = readExamples(opts.train())
-    val evalExamples = readExamples(opts.eval())
+    val trainExamples = readExamples(opts.train()).toIndexedSeq
+    val evalExamples = readExamples(opts.eval()).toIndexedSeq
+
+    // Build the featurizer
+    opts.featurizers().foreach(println)
+    val featurizers = opts.featurizers().map {
+      case "unigram" => new NGramFeaturizer(1, "unigram", stopwords = false)
+      case "bigram" => new NGramFeaturizer(2, "bigram")
+      case "trigram" => new NGramFeaturizer(3, "trigram")
+    }
+    val combinedFeaturizer = new CombinedTweetFeaturizers(featurizers)
+
+    // Display features from a random sample of tweets
+    if (opts.sampleFeatures()) {
+      Random.shuffle(trainExamples).take(5).map(_.features).map { content =>
+        println("\nContent: " + content)
+        combinedFeaturizer(content).foreach { feature =>
+          println("  " + feature.feature + " = " + feature.magnitude)
+        }
+      }
+    }
 
     // Train the classifier
     val method = opts.method()
     val classifier = method match {
       case _ => {   // Assume Liblinear solver
-        // Construct appropriate featurizer
-        val featurizer = {
-          if (opts.extended()) {
-            ExtendedRealFakeFeaturizer
-          } else {
-            BasicRealFakeFeaturizer
-          }
-        }
-
         // Configure and train
         val solverType = liblinear.Solver(method)
         val config = liblinear.LiblinearConfig(
           solverType = solverType,
           cost = opts.cost(),
           showDebug = opts.verbose())
-        NakContext.trainClassifier(config, featurizer, trainExamples.toList)
+        NakContext.trainClassifier(config, combinedFeaturizer, trainExamples)
       }
     }
 
@@ -54,6 +65,7 @@ object RealFake {
     val output = if (opts.detailed()) confusion.detailedOutput else confusion.toString
     println(output)
 
+    // Save the classifier to a file if requested
     opts.save.get match {
       case Some(path) => {
         NakContext.saveClassifier(classifier, path)
@@ -81,6 +93,8 @@ object RealFakeOpts {
   import org.rogach.scallop._
 
   def apply(args: Array[String]) = new ScallopConf(args) {
+    val featurizerTypes = Set("unigram", "bigram", "trigram")
+
     banner("""
 Classification application.
 
@@ -99,10 +113,6 @@ For usage see below:
       "eval",
       short = 'e',
       descr = "The files containing evalualation events.")
-    val extended = opt[Boolean](
-      "extended",
-      short = 'x',
-      descr = "Use extended features.")
     val method = opt[String](
       "method",
       short = 'm',
@@ -112,10 +122,20 @@ For usage see below:
       "train",
       short = 't',
       descr = "The files containing training events.")
+    val featurizers = opt[List[String]](
+      "featurizers",
+      noshort = true,
+      validate = validateList(featurizerTypes) _,
+      descr = "Featurizers to use. Possible values: " + featurizerTypes.toSeq.sorted.mkString(", "))
     val save = opt[String](
       "save",
       noshort = true,
       descr = "Save the classify to the path provided"
+    )
+    val sampleFeatures = opt[Boolean](
+      "sampleFeatures",
+      noshort = true,
+      descr = "Show features for a random sample training tweets."
     )
     val help = opt[Boolean](
       "help",
@@ -124,5 +144,9 @@ For usage see below:
     val verbose = opt[Boolean](
       "verbose",
       short = 'v')
+  }
+
+  def validateList(validator: (String => Boolean))(list: List[String]): Boolean = {
+    list.map(validator).count(_ == false) == 0
   }
 }
