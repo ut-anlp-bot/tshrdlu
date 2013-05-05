@@ -56,3 +56,17 @@ class GappyBigramFeaturizer(gap: Int) extends TweetFeaturizer {
     }.toSeq
   }
 }
+
+class StandardGappyBigramFeaturizer(maxGap: Int) extends TweetFeaturizer {
+  def apply(tweet: PreprocessedTweet): Seq[FeatureObservation[String]] = {
+    (1 to maxGap).flatMap { gap =>
+      val length = gap + 2
+      tweet.lowerTokens.sliding(length).filter(_.length == length).map { tokens =>
+        val token1 = tokens(0)
+        val token2 = tokens(tokens.length - 1)
+        val parts = List(token1, "___", token2)
+        FeatureObservation("standard_gappy=" + parts.mkString("+"))
+      }
+    }.toSeq
+  }
+}
