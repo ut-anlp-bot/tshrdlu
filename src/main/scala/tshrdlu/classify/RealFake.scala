@@ -38,8 +38,21 @@ class NGramFeaturizer(n: Int, name: String, stopwords: Boolean = true)
 extends TweetFeaturizer {
   def apply(tweet: PreprocessedTweet): Seq[FeatureObservation[String]] = {
     val tokens = if(stopwords) tweet.lowerTokens else tweet.lowerTokensNoStopwords
-    tokens.sliding(n).map { ngram =>
+    val boundary = List.fill(n - 1)("<boundary>")
+    (boundary ++ tokens ++ boundary).sliding(n).map { ngram =>
       FeatureObservation(name + "=" + ngram.mkString("+"))
+    }.toSeq
+  }
+}
+
+class GappyBigramFeaturizer(gap: Int) extends TweetFeaturizer {
+  def apply(tweet: PreprocessedTweet): Seq[FeatureObservation[String]] = {
+    val length = gap + 2
+    tweet.lowerTokens.sliding(length).filter(_.length == length).map { tokens =>
+      val token1 = tokens(0)
+      val token2 = tokens(tokens.length - 1)
+      val parts = (List(token1) ++ List.fill(gap)("_") ++ List(token2))
+      FeatureObservation("gappy=" + parts.mkString("+"))
     }.toSeq
   }
 }

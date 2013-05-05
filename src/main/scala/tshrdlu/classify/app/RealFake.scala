@@ -20,11 +20,12 @@ object RealFake {
     val evalExamples = readExamples(opts.eval()).toIndexedSeq
 
     // Build the featurizer
-    opts.featurizers().foreach(println)
+    val Gappy = """gappy(\d+)""".r
     val featurizers = opts.featurizers().map {
       case "unigram" => new NGramFeaturizer(1, "unigram", stopwords = false)
       case "bigram" => new NGramFeaturizer(2, "bigram")
       case "trigram" => new NGramFeaturizer(3, "trigram")
+      case Gappy(gap) => new GappyBigramFeaturizer(gap.toInt)
     }
     val combinedFeaturizer = new CombinedTweetFeaturizers(featurizers)
 
@@ -93,7 +94,8 @@ object RealFakeOpts {
   import org.rogach.scallop._
 
   def apply(args: Array[String]) = new ScallopConf(args) {
-    val featurizerTypes = Set("unigram", "bigram", "trigram")
+    val featurizerTypes = Set("unigram", "bigram", "trigram") ++
+      (1 to 10).map("gappy" + _).toSet
 
     banner("""
 Classification application.
