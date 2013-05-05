@@ -36,12 +36,27 @@ extends Featurizer[String, String] {
 
 class NGramFeaturizer(n: Int, name: String, stopwords: Boolean = true)
 extends TweetFeaturizer {
+  val stripPunctuationPattern = "[a-z0-9#@].*".r.pattern
+
   def apply(tweet: PreprocessedTweet): Seq[FeatureObservation[String]] = {
-    val tokens = if(stopwords) tweet.lowerTokens else tweet.lowerTokensNoStopwords
+    val baseTokens = if(stopwords) tweet.lowerTokens else tweet.lowerTokensNoStopwords
+    val tokens = if (n == 1) {
+      // Exclude punctuation from bag-of-words features
+      baseTokens.filter(t => stripPunctuationPattern.matcher(t).matches)
+    } else {
+      baseTokens
+    }
     val boundary = List.fill(n - 1)("<boundary>")
-    (boundary ++ tokens ++ boundary).sliding(n).map { ngram =>
-      FeatureObservation(name + "=" + ngram.mkString("+"))
+    val ngrams = (boundary ++ tokens ++ boundary).sliding(n).toList
+    ngrams.map { ngram =>
+      FeatureObservation(name + "=" + ngram.mkString("+"), 1.0 / ngrams.length)
     }.toSeq
+  }
+}
+
+object LengthFeaturizer extends TweetFeaturizer {
+  def apply(tweet: PreprocessedTweet): Seq[FeatureObservation[String]] = {
+    Seq(FeatureObservation("length", tweet.lowerTokens.length))
   }
 }
 

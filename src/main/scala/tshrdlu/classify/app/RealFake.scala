@@ -27,6 +27,7 @@ object RealFake {
       case "unigram" => new NGramFeaturizer(1, "unigram", stopwords = false)
       case "bigram" => new NGramFeaturizer(2, "bigram")
       case "trigram" => new NGramFeaturizer(3, "trigram")
+      case "length" => LengthFeaturizer
       case "fractionStopwords" => FractionStopwordsFeaturizer
       case FractionDuplicateNGram(n) => new FractionDuplicateNGramFeaturizer(n.toInt)
       case Gappy(gap) => new GappyBigramFeaturizer(gap.toInt)
@@ -61,8 +62,9 @@ object RealFake {
     // Predict the evaluation data
     val comparisons = {
       val maxLabel = NakContext.maxLabel(classifier.labels) _
-      for (ex <- evalExamples)
-        yield (ex.label, maxLabel(classifier.evalRaw(ex.features)), ex.features)
+      for (ex <- evalExamples) yield {
+        (ex.label, maxLabel(classifier.evalRaw(ex.features)), ex.features)
+      }
     }
 
     // Print the confusion matrix
@@ -102,7 +104,8 @@ object RealFakeOpts {
     val featurizerTypes = Set("unigram", "bigram", "trigram", "fractionStopwords") ++
       (1 to 5).map("fractionDuplicateNGram" + _).toSet ++
       (1 to 10).map("gappy" + _).toSet ++
-      (1 to 50).map("standardGappyMax" + _).toSet
+      (1 to 50).map("standardGappyMax" + _).toSet ++
+      Set("length")
 
     banner("""
 Classification application.
