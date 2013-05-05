@@ -8,7 +8,8 @@ done
 
 Then experiment with classifying them:
 
-tshrdlu real_fake --train data/real_fake/train.xml --eval data/real_fake/dev.xml --extended --cost 0.5
+tshrdlu real_fake --train data/real_fake/train.xml --eval data/real_fake/dev.xml --sampleFeatures \
+    --featurizers unigram bigram fractionDuplicateNGram2
 
 
 To save the classifier, add a "--save path/to/classifier.obj" argument

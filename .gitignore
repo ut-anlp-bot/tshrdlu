@@ -7,3 +7,6 @@ target/
 *~
 *.class
 twitter4j.properties
+data/real_fake/train.xml
+data/real_fake/dev.xml
+data/real_fake/test.xml
