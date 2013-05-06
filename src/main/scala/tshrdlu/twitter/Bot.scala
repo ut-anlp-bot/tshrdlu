@@ -35,10 +35,12 @@ object Bot {
   object Shutdown
   case class MonitorUserStream(listen: Boolean)
   case class RegisterReplier(replier: ActorRef)
-  case class ReplyToStatus(status: Status)
+  case class ReplyToStatus(status: Status,user:String)
   case class SearchTwitter(query: Query)
   case class UserTimeline(screenName: String)
   case class UpdateStatus(update: StatusUpdate)
+  case class SetUsername(username: String)
+  case class GetUsername(username: String)
 
   def main (args: Array[String]) {
     val system = ActorSystem("TwitterBot")
@@ -64,7 +66,7 @@ class Bot extends Actor with ActorLogging {
 
   val username = new TwitterStreamFactory().getInstance.getScreenName
   val streamer = new Streamer(context.self)
-
+  var whichUser = ""
   val twitter = new TwitterFactory().getInstance
   val replierManager = context.actorOf(Props[ReplierManager], name = "ReplierManager")
 
@@ -159,12 +161,32 @@ class Bot extends Actor with ActorLogging {
       twitter.updateStatus(update)
 
     case status: Status =>
+    var userName = ""
       log.info("New status: " + status.getText)
       val replyName = status.getInReplyToScreenName
       if (replyName == username) {
         log.info("Replying to: " + status.getText)
-        replierManager ! ReplyToStatus(status)
+      val setuser = """(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*\s+Set User:)(.*)""".r
+          val flag = status.getText match {
+          case setuser(a) => userName = a
+          case _ => None
+        }
+        if(flag != None) {
+          whichUser = userName
+          log.info("Setting User: " + whichUser)
+          replierManager ! SetUsername(whichUser)
+        }
+        else{
+          if(whichUser != ""){
+         log.info("Collecting from: " + whichUser)
+        replierManager ! ReplyToStatus(status,whichUser)
       }
+      else {
+          replierManager ! SetUsername(username)
+          replierManager ! ReplyToStatus(status,username)
+        }
+        }
+      } 
 
   }
 }
@@ -180,23 +202,55 @@ class ReplierManager extends Actor with ActorLogging {
   import scala.concurrent.duration._
   import scala.concurrent.Future
   import scala.util.{Success,Failure}
-  implicit val timeout = Timeout(20 seconds)
+  implicit val timeout = Timeout(100 seconds)
 
   lazy val random = new scala.util.Random
+
+  var collectUser = ""
 
   var repliers = Vector.empty[ActorRef]
 
   def receive = {
+    case SetUsername(username) =>
+      collectUser = username
+
+    case GetUsername =>
+      sender ! collectUser
+
     case RegisterReplier(replier) => 
       repliers = repliers :+ replier
 
-    case ReplyToStatus(status) =>
-
-      val replyFutures: Seq[Future[Option[StatusUpdate]]] = 
-        repliers.map(r => (r ? ReplyToStatus(status))
+    case ReplyToStatus(status,user) =>
+      /*var whichUser = ""
+      //if(status.getText.contains("Set User:")){
+        val setuser = """(?:Set User:)(.*)""".r
+          val userName = status.getText match {
+          case setuser(a) => a
+          case _ => None
+        //}
+        //log.info("Using user tweets from : "+userName)
+      }*/
+      /*
+      var replyFutures =  Seq[Future[Option[StatusUpdate]]]()
+      if(userName == None && whichUser == ""){
+      replyFutures = 
+        repliers.map(r => (r ? ReplyToStatus(status,user))
           .recover { case e: Throwable => None }
           .mapTo[Option[StatusUpdate]])
-
+      }
+      else if(whichUser != "") {
+        replyFutures = 
+        repliers.map(r => (r ? ReplyToStatus(status,whichUser))
+          .recover { case e: Throwable => None }
+          .mapTo[Option[StatusUpdate]])
+      }
+      else{
+        whichUser = userName
+      }*/
+      val replyFutures : Seq[Future[Option[StatusUpdate]]] = 
+        repliers.map(r => (r ? ReplyToStatus(status,user))
+          .recover { case e: Throwable => None }
+          .mapTo[Option[StatusUpdate]])
       val futureUpdate = Future.sequence(replyFutures).map(_.flatten).map { candidates =>
         val numCandidates = candidates.length
         log.info("Number of candidates: " + numCandidates)
