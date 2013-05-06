@@ -214,7 +214,7 @@ val compreMap = (normalizedMap /: finalMap) { case (map, (k,v)) =>
       else (x(1)-x(0))}
     val predictResult = realList.zip(lengthFilter).sortBy(-_._1)
     val topTen = predictResult.take(10)
-    for(i <- 0 to topTen.size)
+    for(i <- 0 to topTen.size-1)
       println(topTen(i))
     if(lengthFilter.length == 0)
       Future{Seq(sortReply.head)}
