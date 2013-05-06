@@ -73,7 +73,9 @@ class Bot extends Actor with ActorLogging {
   // Create the LocationResolver actor
   val geoNamesUsername = System.getenv("TSHRDLU_GEONAMES_USERNAME")
   if (geoNamesUsername == null) {
-    throw new IllegalArgumentException("Environment variable TSHRDLU_GEONAMES_USERNAME is not set.")
+    val error = "ERROR!!! Environment variable TSHRDLU_GEONAMES_USERNAME is not set."
+    log.error(error)
+    throw new IllegalArgumentException(error)
   }
   val locProps = Props(new LocationResolver(geoNamesUsername))
   val locationResolver = context.actorOf(locProps, name = "LocationResolver")
