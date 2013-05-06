@@ -61,177 +61,164 @@ class GeoReplier extends BaseReplier {
   import math.ceil
   import tshrdlu.util._
   import tshrdlu.twitter._
-  //import tshrdlu.classify.{BasicRealFakeFeaturizer, ExtendedRealFakeFeaturizer}
+
   implicit val timeout = Timeout(100 seconds)
-  
+
   /**
    * Produce a reply to a status using geography
    */
-
   def getReplies(status: Status, maxLength: Int, user: String, locResolver: ActorRef): Future[Seq[String]] = {
     log.info("Trying to reply through GeoReplier")
-    /**
-    * Try to fetch the user's Location
-    */
+
+    // Try to fetch the user's Location
     val locationResolver = (locResolver ? LocateStatus(status)).mapTo[Option[LocationConfidence]]
-    val result = Await.result(locationResolver, 15.seconds).asInstanceOf[Option[LocationConfidence]] 
+    val result = Await.result(locationResolver, 15.seconds).asInstanceOf[Option[LocationConfidence]]
     result match {
-    case Some(loc) => 
-    val latitude =loc.latitude
-    val longitude = loc.longitude
-    log.info("Latitude: " + loc.latitude + ", Longitude: " + loc.longitude + " -- " + loc.confidence)
-    
-    val text = stripLeadMention(status.getText).toLowerCase
-    val tweetBuffer = collection.mutable.ListBuffer[String]()
-    var numTweetsSeen = 0
-    
-    def simpleStatusListener = new StatusListener() {
-    def onStatus(status: Status) { 
-      tweetBuffer += status.getText
-      numTweetsSeen += 1
-      println(status.getText) 
-    }
-    def onDeletionNotice(statusDeletionNotice: StatusDeletionNotice) {}
-    def onTrackLimitationNotice(numberOfLimitedStatuses: Int) {}
-    def onException(ex: Exception) { ex.printStackTrace 
-    }
-    def onScrubGeo(arg0: Long, arg1: Long) {}
-    def onStallWarning(warning: StallWarning) {}
-    }
-   /**
-    * Fetch tweets from set User's timeline, at the most 200
-    */
-    val userScreenName = user
-    val futureTweets = (context.parent ? UserTimeline(userScreenName)).mapTo[Seq[Status]]
-    val tweets = Await.result(futureTweets, 15.seconds).asInstanceOf[Seq[Status]]
-    /**
-    * Strip Leading Mentions and replace other mentions with JustinBieber
-    */
-    val userText = tweets.map(_.getText).toList.map {
-      case StripMentionsRE(rest) => rest
-      case x => x
-    }
-    .filter(tshrdlu.util.English.isSafe) 
-    .map(x => x.replaceAll("""(?:RT\s)?(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?\s)+""", ""))
-    .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
-    .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
-    .filter(tshrdlu.util.English.isEnglish)
+      case Some(loc) =>
+        val latitude =loc.latitude
+        val longitude = loc.longitude
+        log.info("Latitude: " + loc.latitude + ", Longitude: " + loc.longitude + " -- " + loc.confidence)
 
-    /**
-    * Create a Bigram map of the user's tweets
-    */
-    val tweetSet = userText
-        .flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
-    val userFilter = tweetSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
-    val userMap = userFilter.toList.groupBy(x=>x).mapValues(x=>x.length.toDouble).toMap
+        val text = stripLeadMention(status.getText).toLowerCase
+        val tweetBuffer = collection.mutable.ListBuffer[String]()
+        var numTweetsSeen = 0
 
-    val twitter = new TwitterFactory().getInstance
-   /**
-    * Collect Trends closest to the user's Location
-    */
-    val locList = twitter.getClosestTrends(new GeoLocation(latitude,longitude))
-    val loctrend = twitter.getPlaceTrends(locList.get(0).getWoeid).getTrends
-    var trendList = List[String]()
-    for(i <- 0 until loctrend.size){
+        def simpleStatusListener = new StatusListener() {
+          def onStatus(status: Status) {
+            tweetBuffer += status.getText
+            numTweetsSeen += 1
+            println(status.getText)
+          }
+          def onDeletionNotice(statusDeletionNotice: StatusDeletionNotice) {}
+          def onTrackLimitationNotice(numberOfLimitedStatuses: Int) {}
+          def onException(ex: Exception) { ex.printStackTrace }
+          def onScrubGeo(arg0: Long, arg1: Long) {}
+          def onStallWarning(warning: StallWarning) {}
+        }
+
+        // Fetch tweets from set User's timeline, at the most 200
+        val userScreenName = user
+        val futureTweets = (context.parent ? UserTimeline(userScreenName)).mapTo[Seq[Status]]
+        val tweets = Await.result(futureTweets, 15.seconds).asInstanceOf[Seq[Status]]
+
+        // Strip Leading Mentions and replace other mentions with JustinBieber
+        val userText = tweets.map(_.getText).toList.map {
+          case StripMentionsRE(rest) => rest
+          case x => x
+        }
+        .filter(tshrdlu.util.English.isSafe) 
+        .map(x => x.replaceAll("""(?:RT\s)?(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?\s)+""", ""))
+        .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
+        .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
+        .filter(tshrdlu.util.English.isEnglish)
+
+        // Create a Bigram map of the user's tweets
+        val tweetSet = userText
+            .flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
+        val userFilter = tweetSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
+        val userMap = userFilter.toList.groupBy(x=>x).mapValues(x=>x.length.toDouble).toMap
+
+        val twitter = new TwitterFactory().getInstance
+
+        // Collect Trends closest to the user's Location
+        val locList = twitter.getClosestTrends(new GeoLocation(latitude,longitude))
+        val loctrend = twitter.getPlaceTrends(locList.get(0).getWoeid).getTrends
+        var trendList = List[String]()
+        for(i <- 0 until loctrend.size) {
           trendList = loctrend(i).getName :: trendList
-    }
-    println(trendList)
-    /**
-    * Randomly select a trend close to the user
-    */
-    val filterTrends = trendList.filter(x => x.startsWith("#"))
-    val trending = Random.shuffle(filterTrends).head
-    val trend = Array(trending)
-    val tweetSearch  = twitter.search(new Query("\""+trending+"\"")).getTweets
-    var tweetText = List[String]()
-    for(i <-0 to tweetSearch.size-1) 
-      tweetText =  tweetSearch.get(i).getText :: tweetText
+        }
+        println(trendList)
 
-    tweetText.foreach(println)
-    tweetText = tweetText
-        .map {
-      case StripMentionsRE(rest) => rest
-      case x => x
-    }
-    .filter(tshrdlu.util.English.isSafe) 
-    .map(x => x.replaceAll("""(?:RT\s)?(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?\s)+""", ""))
-    .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
-    .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
-    .filter(tshrdlu.util.English.isEnglish)
-    val trainSet = tweetText.flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
-    val filterTrain = trainSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
-    /**
-    * Make a Bigram Map of the offline tweets collected along with their probabilities
-    */
-  val normalizedNew = scala.io.Source.fromFile("src/main/resources/lang/eng/lexicon/twitterBigramfreq.txt").getLines
-    .flatMap(t => t.split("\t") match {
-      case Array(str1, str2) => Map(str1.toLowerCase -> str2.toDouble)
-  } ) toMap
+        // Randomly select a trend close to the user
+        val filterTrends = trendList.filter(x => x.startsWith("#"))
+        val trending = Random.shuffle(filterTrends).head
+        val trend = Array(trending)
+        val tweetSearch  = twitter.search(new Query("\""+trending+"\"")).getTweets
+        var tweetText = List[String]()
+        for (i <- 0 to (tweetSearch.size - 1))
+          tweetText =  tweetSearch.get(i).getText :: tweetText
 
-   val normalizedMap = normalizedNew.toMap
-   val markovMap = filterTrain.toList.groupBy(x=>x).mapValues(x=>x.length.toDouble).toMap
+        tweetText.foreach(println)
+        tweetText = tweetText.map {
+          case StripMentionsRE(rest) => rest
+          case x => x
+        }
+        .filter(tshrdlu.util.English.isSafe)
+        .map(x => x.replaceAll("""(?:RT\s)?(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?\s)+""", ""))
+        .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
+        .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
+        .filter(tshrdlu.util.English.isEnglish)
+        val trainSet = tweetText.flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
+        val filterTrain = trainSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
 
-   val realSet = tweetText ++ userText
-   val realTrend = realSet.map{x => if(!x.contains(trending)) x+" "+trending else x}
-   val realTweets = realTrend.filterNot(x => (x=="" || x.contains("\n"))).sortBy(-_.length).distinct
-    /**
-    * Combine all three models using weights
-    */
-  val finalMap = (markovMap /: userMap) { case (map, (k,v)) =>
-    map + ( k -> (0.5*v + 0.5*map.getOrElse(k, 0.0)))
-}
+        // Make a Bigram Map of the offline tweets collected along with their probabilities
+        val normalizedNew = scala.io.Source.fromFile("src/main/resources/lang/eng/lexicon/twitterBigramfreq.txt").getLines
+          .flatMap(t => t.split("\t") match {
+            case Array(str1, str2) => Map(str1.toLowerCase -> str2.toDouble)
+          }) toMap
 
-val compreMap = (normalizedMap /: finalMap) { case (map, (k,v)) =>
-    map + ( k -> (0.80*v + 0.20*map.getOrElse(k, 0.0)))
-}
-    /**
-    * Generate 500 tweets using the aggregate model
-    */
-    var replySample = List[String]()
-    for(k <- 1 to 500){  
-      replySample = generateSentence(trending,compreMap,maxLength)::replySample
-    }
-    
+        val normalizedMap = normalizedNew.toMap
+        val markovMap = filterTrain.toList.groupBy(x=>x).mapValues(x=>x.length.toDouble).toMap
 
-    val genReply = replySample.map(x => postProcess(x)).filter(x => x.length < maxLength)
-    val sortReply = genReply.sortBy(-_.length).distinct
-    /**
-    * Printing distinct generated candidate replies sorted by length
-    */
-    println("************************************")
-    sortReply.foreach(println)
-    println("************************************")
-    /**
-    * Load the classifier and run it on the generated candidate replies and pritn top 10 tweets
-    */
-    val classifier = NakContext.loadClassifier[FeaturizedClassifier[String,String]]("real_fake.obj")
-    val comparisons = for (ex <- sortReply) yield 
-      classifier.evalRaw(ex)
-    val lengthFilter = sortReply.filter(x => ((x.length > 40 && x.length < maxLength) && (x.split("\\s+").toList.length > 3)))
-    val realIndex = classifier.labels.toList.indexOf("real")
-    val results = comparisons.map(x => x.toList)
-    val realList = results.map{x => if(realIndex == 0) (x(0)-x(1))
-      else (x(1)-x(0))}
-    val predictResult = realList.zip(lengthFilter).sortBy(-_._1)
-    val topTen = predictResult.take(10)
-    for(i <- 0 to topTen.size-1)
-      println(topTen(i))
-    if(lengthFilter.length == 0)
-      Future{Seq(sortReply.head)}
-    else
-    Future{Seq(predictResult(0)._2)}
-    case None => log.info("Couldn't find status location")
+        val realSet = tweetText ++ userText
+        val realTrend = realSet.map{x => if(!x.contains(trending)) x+" "+trending else x}
+        val realTweets = realTrend.filterNot(x => (x=="" || x.contains("\n"))).sortBy(-_.length).distinct
+
+      // Combine all three models using weights
+      val finalMap = (markovMap /: userMap) {
+        case (map, (k,v)) => map + ( k -> (0.5*v + 0.5*map.getOrElse(k, 0.0)))
+      }
+
+      val compreMap = (normalizedMap /: finalMap) {
+        case (map, (k,v)) => map + ( k -> (0.80*v + 0.20*map.getOrElse(k, 0.0)))
+      }
+
+      // Generate 500 tweets using the aggregate model
+      var replySample = List[String]()
+      for(k <- 1 to 500) {
+        replySample = generateSentence(trending,compreMap,maxLength)::replySample
+      }
+
+      val genReply = replySample.map(x => postProcess(x)).filter(x => x.length < maxLength)
+      val sortReply = genReply.sortBy(-_.length).distinct
+
+      // Printing distinct generated candidate replies sorted by length
+      println("************************************")
+      sortReply.foreach(println)
+      println("************************************")
+
+      // Load the classifier and run it on the generated candidate replies and
+      // print top 10 tweets
+      val classifier = NakContext.loadClassifier[FeaturizedClassifier[String,String]]("real_fake.obj")
+      val comparisons = for (ex <- sortReply) yield
+        classifier.evalRaw(ex)
+      val lengthFilter = sortReply.filter(x => ((x.length > 40 && x.length < maxLength) && (x.split("\\s+").toList.length > 3)))
+      val realIndex = classifier.labels.toList.indexOf("real")
+      val results = comparisons.map(x => x.toList)
+      val realList = results.map { x =>
+        if(realIndex == 0) (x(0)-x(1)) else (x(1)-x(0))
+      }
+      val predictResult = realList.zip(lengthFilter).sortBy(-_._1)
+      val topTen = predictResult.take(10)
+      for(i <- 0 to (topTen.size - 1))
+        println(topTen(i))
+      if(lengthFilter.length == 0)
+        Future{Seq(sortReply.head)}
+      else
+        Future{Seq(predictResult(0)._2)}
+      case None => log.info("Couldn't find status location")
         Future{Seq()}
-    
     }
   }
-  def stringLength(s1:Int,s2:Int) : Int ={
+
+  def stringLength(s1:Int,s2:Int) : Int = {
     s1+s2+1
   }
+
   /**
-    * Post processing of candidate replies
+    * Post processing of candidate replies.
     */
-  def postProcess(reply:String): String ={
+  def postProcess(reply:String): String = {
     var tempReply = reply.trim
     var finalReply = ""
     if(tempReply.contains("."))
@@ -255,41 +242,44 @@ val compreMap = (normalizedMap /: finalMap) { case (map, (k,v)) =>
     val g = p.replaceAll(""" i """,""" I """)
     return g
   }
+
   /**
-    * Generate sentence going using forward bigram model, starting with ^ and ending with $$
+    * Generate sentence going using forward bigram model, starting with ^ and
+    * ending with $$
     */
   def generateSentence(trending:String,compreMap:Map[String,Double],maxLength : Int):String={
     var newSentence = ""
     var symbol = "^"
     var genSentence = ""
     var flag1 = false
-    while(symbol != "$$"){
-        val wordKey = compreMap.filter(p => p._1.startsWith(symbol+" "))
-        val wordCountOld = wordKey.toSeq.sortBy(-_._2)
-        val total = wordCountOld.map(_._2).sum
-        val wordCount = wordKey.map { v => (v._1 -> v._2*1.0 / total)}.toSeq.sortBy(-_._2)
-        val rand = Random.nextDouble()
-        var sampleProb = wordCount(0)._2
-        var ind = 0
-        while(sampleProb < rand ){
-          ind +=1
-          sampleProb+=wordCount(ind)._2     
-        }
-        
-        val word = wordCount(ind)._1.split("\\s+").toList
-        symbol = word(1)
-        if(flag1 == false)
-          flag1 = true
-        else
-          newSentence = newSentence+" "+word(0)
-        println(symbol)
-        println(newSentence)
+    while(symbol != "$$") {
+      val wordKey = compreMap.filter(p => p._1.startsWith(symbol+" "))
+      val wordCountOld = wordKey.toSeq.sortBy(-_._2)
+      val total = wordCountOld.map(_._2).sum
+      val wordCount = wordKey.map { v => (v._1 -> v._2*1.0 / total)}.toSeq.sortBy(-_._2)
+      val rand = Random.nextDouble()
+      var sampleProb = wordCount(0)._2
+      var ind = 0
+      while(sampleProb < rand ){
+        ind +=1
+        sampleProb+=wordCount(ind)._2     
       }
 
-  if(!newSentence.contains(trending))
-    newSentence = newSentence + " "+ trending
-    newSentence
-  }
+      val word = wordCount(ind)._1.split("\\s+").toList
+      symbol = word(1)
+      if(flag1 == false)
+        flag1 = true
+      else
+        newSentence = newSentence+" "+word(0)
+      println(symbol)
+      println(newSentence)
+    }
+
+    if (!newSentence.contains(trending))
+      newSentence = newSentence + " "+ trending
+      newSentence
+    }
+
   def getText(status: Status): Option[String] = {
     import tshrdlu.util.English.{isEnglish,isSafe}
 
@@ -297,37 +287,37 @@ val compreMap = (normalizedMap /: finalMap) { case (map, (k,v)) =>
       case StripMentionsRE(rest) => rest
       case x => x
     }
-    
+
     if (!text.contains('@') && !text.contains('/') && isEnglish(text) && isSafe(text))
       Some(text)
-    else None
+    else
+      None
   }
 
-  
   def Tokenize(text: String): IndexedSeq[String]={
     val starts = """(?:[#@])|\b(?:http)"""
     text
-    .toLowerCase
-    .replaceAll("""([\?!()\";\|\[\].,':])""", " $1 ")
-    .trim
-    .split("\\s+")
-    .filterNot(x=> x.contains("'"))
-    .filterNot(x=> x=="'")
-    .filterNot(x=> x=="!")
-    .filterNot(x=> x=="?")
-    .toIndexedSeq
-    .filterNot(x => x.startsWith(starts))
-    .filterNot(x => x.startsWith("RT"))
+      .toLowerCase
+      .replaceAll("""([\?!()\";\|\[\].,':])""", " $1 ")
+      .trim
+      .split("\\s+")
+      .filterNot(x=> x.contains("'"))
+      .filterNot(x=> x=="'")
+      .filterNot(x=> x=="!")
+      .filterNot(x=> x=="?")
+      .toIndexedSeq
+      .filterNot(x => x.startsWith(starts))
+      .filterNot(x => x.startsWith("RT"))
   }
 
   def using[A <: {def close(): Unit}, B](param: A)(f: A => B): B =
       try { f(param) } finally { param.close() }
 
   def appendToFile(fileName:String, textData:String) =
-  using (new FileWriter(fileName, true)){ 
-    fileWriter => using (new PrintWriter(fileWriter)) {
-      printWriter => printWriter.flush
-      printWriter.println(textData)
+    using (new FileWriter(fileName, true)){
+      fileWriter => using (new PrintWriter(fileWriter)) {
+        printWriter => printWriter.flush
+        printWriter.println(textData)
+      }
     }
-  }
 }
