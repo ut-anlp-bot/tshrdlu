@@ -35,7 +35,7 @@ object Bot {
   object Shutdown
   case class MonitorUserStream(listen: Boolean)
   case class RegisterReplier(replier: ActorRef)
-  case class ReplyToStatus(status: Status,user:String)
+  case class ReplyToStatus(status: Status, user: String, locationResolver: ActorRef)
   case class SearchTwitter(query: Query)
   case class UserTimeline(screenName: String)
   case class UpdateStatus(update: StatusUpdate)
@@ -70,63 +70,19 @@ class Bot extends Actor with ActorLogging {
   val twitter = new TwitterFactory().getInstance
   val replierManager = context.actorOf(Props[ReplierManager], name = "ReplierManager")
 
-
-  // Attempt to create the LocationResolver actor
-  //context.actorFor("akka://TwitterBot/user/LocationResolver")
-  //Option(System.getenv("TSHRDLU_GEONAMES_USERNAME")) match {
-  //  case Some(geoNamesUsername) =>
-  //    val locProps = Props(new LocationResolver(geoNamesUsername))
-  //    context.system.actorOf(locProps, name = "LocationResolver")
-  //  case None =>
-  //    log.warning("Environment variable TSHRDLU_GEONAMES_USERNAME not set. " +
-  //                "LocationResolver will not be available.")
-  //}
+  // Create the LocationResolver actor
   val geoNamesUsername = System.getenv("TSHRDLU_GEONAMES_USERNAME")
+  if (geoNamesUsername == null) {
+    val error = "ERROR!!! Environment variable TSHRDLU_GEONAMES_USERNAME is not set."
+    log.error(error)
+    throw new IllegalArgumentException(error)
+  }
   val locProps = Props(new LocationResolver(geoNamesUsername))
-  val locationResolver = context.system.actorOf(locProps, name = "LocationResolver")
+  val locationResolver = context.actorOf(locProps, name = "LocationResolver")
 
-/*
-  val streamReplier = context.actorOf(Props[StreamReplier], name = "StreamReplier")
-  val synonymReplier = context.actorOf(Props[SynonymReplier], name = "SynonymReplier")
-  val synonymStreamReplier = context.actorOf(Props[SynonymStreamReplier], name = "SynonymStreamReplier")
-  val bigramReplier = context.actorOf(Props[BigramReplier], name = "BigramReplier")
-  val luceneReplier = context.actorOf(Props[LuceneReplier], name = "LuceneReplier")
-  val topicModelReplier = context.actorOf(Props[TopicModelReplier], name = "TopicModelReplier")
-  val chunkReplier = context.actorOf(Props[ChunkReplier], name = "ChunkReplier")
-  val sudoReplier = context.actorOf(Props[SudoReplier], name = "SudoReplier")
-  val twssReplier = context.actorOf(Props[TWSSReplier], name = "TWSSReplier")
-<<<<<<< HEAD
- */ //val geoReplier = context.actorOf(Props[GeoReplier], name = "GeoReplier")
-
-  val geoProps = Props(new GeoReplier(locationResolver))
-  val geoReplier = context.actorOf(geoProps, name = "GeoReplier")
-
+  val geoReplier = context.actorOf(Props[GeoReplier], name = "GeoReplier")
 
   override def preStart {
-/*    replierManager ! RegisterReplier(streamReplier)
-    replierManager ! RegisterReplier(synonymReplier)
-    replierManager ! RegisterReplier(synonymStreamReplier)
-    replierManager ! RegisterReplier(bigramReplier)
-    replierManager ! RegisterReplier(luceneReplier)
-    replierManager ! RegisterReplier(topicModelReplier)
-    replierManager ! RegisterReplier(chunkReplier)
-    replierManager ! RegisterReplier(sudoReplier)
-    replierManager ! RegisterReplier(twssReplier)
-<<<<<<< HEAD
-  */  
-/*
-  replierManager ! RegisterReplier(geoReplier)
-
-    // Attempt to create the LocationResolver actor
-    Option(System.getenv("TSHRDLU_GEONAMES_USERNAME")) match {
-      case Some(geoNamesUsername) =>
-        val locProps = Props(new LocationResolver(geoNamesUsername))
-        context.system.actorOf(locProps, name = "LocationResolver")
-      case None =>
-        log.warning("Environment variable TSHRDLU_GEONAMES_USERNAME not set. " +
-                    "LocationResolver will not be available.")
-    }
-*/
     replierManager ! RegisterReplier(geoReplier)
   }
 
@@ -179,11 +135,11 @@ class Bot extends Actor with ActorLogging {
         else{
           if(whichUser != ""){
          log.info("Collecting from: " + whichUser)
-        replierManager ! ReplyToStatus(status,whichUser)
+        replierManager ! ReplyToStatus(status, whichUser, locationResolver)
       }
       else {
           replierManager ! SetUsername(username)
-          replierManager ! ReplyToStatus(status,username)
+          replierManager ! ReplyToStatus(status, username, locationResolver)
         }
         }
       } 
@@ -220,35 +176,9 @@ class ReplierManager extends Actor with ActorLogging {
     case RegisterReplier(replier) => 
       repliers = repliers :+ replier
 
-    case ReplyToStatus(status,user) =>
-      /*var whichUser = ""
-      //if(status.getText.contains("Set User:")){
-        val setuser = """(?:Set User:)(.*)""".r
-          val userName = status.getText match {
-          case setuser(a) => a
-          case _ => None
-        //}
-        //log.info("Using user tweets from : "+userName)
-      }*/
-      /*
-      var replyFutures =  Seq[Future[Option[StatusUpdate]]]()
-      if(userName == None && whichUser == ""){
-      replyFutures = 
-        repliers.map(r => (r ? ReplyToStatus(status,user))
-          .recover { case e: Throwable => None }
-          .mapTo[Option[StatusUpdate]])
-      }
-      else if(whichUser != "") {
-        replyFutures = 
-        repliers.map(r => (r ? ReplyToStatus(status,whichUser))
-          .recover { case e: Throwable => None }
-          .mapTo[Option[StatusUpdate]])
-      }
-      else{
-        whichUser = userName
-      }*/
+    case ReplyToStatus(status, user, locationResolver) =>
       val replyFutures : Seq[Future[Option[StatusUpdate]]] = 
-        repliers.map(r => (r ? ReplyToStatus(status,user))
+        repliers.map(r => (r ? ReplyToStatus(status, user, locationResolver))
           .recover { case e: Throwable => None }
           .mapTo[Option[StatusUpdate]])
       val futureUpdate = Future.sequence(replyFutures).map(_.flatten).map { candidates =>
