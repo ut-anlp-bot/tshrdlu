@@ -111,7 +111,9 @@ class GeoReplier extends BaseReplier {
         .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
         .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
         .filter(tshrdlu.util.English.isEnglish)
-
+        println("////////////////")
+        userText.foreach(println)
+        println("////////////////")
         // Create a Bigram map of the user's tweets
         val tweetSet = userText
             .flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
@@ -123,7 +125,7 @@ class GeoReplier extends BaseReplier {
         // Collect Trends closest to the user's Location
         val locList = twitter.getClosestTrends(new GeoLocation(latitude,longitude))
         val loctrend = twitter.getPlaceTrends(locList.get(0).getWoeid).getTrends
-        //val allTrend = twitter.getCurrentTrends
+        //val allTrend = twitter.getCurrentTrends(false).getTrends
         var trendList = List[String]()
         for(i <- 0 until loctrend.size) {
           trendList = loctrend(i).getName :: trendList
@@ -138,8 +140,6 @@ class GeoReplier extends BaseReplier {
         var tweetText = List[String]()
         for (i <- 0 to (tweetSearch.size - 1))
           tweetText =  tweetSearch.get(i).getText :: tweetText
-
-        tweetText.foreach(println)
         tweetText = tweetText.map {
           case StripMentionsRE(rest) => rest
           case x => x
@@ -149,6 +149,7 @@ class GeoReplier extends BaseReplier {
         .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
         .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
         .filter(tshrdlu.util.English.isEnglish)
+        tweetText.foreach(println)
         val trainSet = tweetText.flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
         val filterTrain = trainSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
 
@@ -213,8 +214,148 @@ class GeoReplier extends BaseReplier {
         Future{Seq(sortReply.head)}
       else
         Future{Seq(predictResult(0)._2)}
-      case None => log.info("Couldn't find status location")
-        Future{Seq()}
+      case None => 
+        log.info("Defaulting to Austin as location")
+        //Future{Seq()}
+        val latitude =30.26
+        val longitude = -97.74
+        log.info("Latitude: " + latitude + ", Longitude: " + longitude)
+
+        val text = stripLeadMention(status.getText).toLowerCase
+        val tweetBuffer = collection.mutable.ListBuffer[String]()
+        var numTweetsSeen = 0
+
+        def simpleStatusListener = new StatusListener() {
+          def onStatus(status: Status) {
+            tweetBuffer += status.getText
+            numTweetsSeen += 1
+            println(status.getText)
+          }
+          def onDeletionNotice(statusDeletionNotice: StatusDeletionNotice) {}
+          def onTrackLimitationNotice(numberOfLimitedStatuses: Int) {}
+          def onException(ex: Exception) { ex.printStackTrace }
+          def onScrubGeo(arg0: Long, arg1: Long) {}
+          def onStallWarning(warning: StallWarning) {}
+        }
+
+        // Fetch tweets from set User's timeline, at the most 200
+        val userScreenName = user
+        val futureTweets = (context.parent ? UserTimeline(userScreenName)).mapTo[Seq[Status]]
+        val tweets = Await.result(futureTweets, 15.seconds).asInstanceOf[Seq[Status]]
+
+        // Strip Leading Mentions and replace other mentions with JustinBieber
+        val userText = tweets.map(_.getText).toList.map {
+          case StripMentionsRE(rest) => rest
+          case x => x
+        }
+        .filter(tshrdlu.util.English.isSafe) 
+        .map(x => x.replaceAll("""(?:RT\s)?(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?\s)+""", ""))
+        .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
+        .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
+        .filter(tshrdlu.util.English.isEnglish)
+        println("////////////////")
+        userText.foreach(println)
+        println("////////////////")
+        // Create a Bigram map of the user's tweets
+        val tweetSet = userText
+            .flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
+        val userFilter = tweetSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
+        val userMap = userFilter.toList.groupBy(x=>x).mapValues(x=>x.length.toDouble).toMap
+
+        val twitter = new TwitterFactory().getInstance
+
+        // Collect Trends closest to the user's Location
+        val locList = twitter.getClosestTrends(new GeoLocation(latitude,longitude))
+        val loctrend = twitter.getPlaceTrends(locList.get(0).getWoeid).getTrends
+        //val allTrend = twitter.getCurrentTrends
+        var trendList = List[String]()
+        for(i <- 0 until loctrend.size) {
+          trendList = loctrend(i).getName :: trendList
+        }
+        println(trendList)
+
+        // Randomly select a trend close to the user
+        val filterTrends = trendList.filter(x => x.startsWith("#"))
+        val trending = Random.shuffle(filterTrends).head
+        val trend = Array(trending)
+        val tweetSearch  = twitter.search(new Query("\""+trending+"\"")).getTweets
+        var tweetText = List[String]()
+        for (i <- 0 to (tweetSearch.size - 1))
+          tweetText =  tweetSearch.get(i).getText :: tweetText
+        tweetText = tweetText.map {
+          case StripMentionsRE(rest) => rest
+          case x => x
+        }
+        .filter(tshrdlu.util.English.isSafe)
+        .map(x => x.replaceAll("""(?:RT\s)?(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?\s)+""", ""))
+        .map(x => x.replaceAll("""(?:@[0-9]*[A-Za-z]+[0-9'_\.]*[A-Za-z\.]*:?)""", "JustinBieber "))
+        .map(x => x.replaceAll("""(?:\\s\\s)+""","\\s"))
+        .filter(tshrdlu.util.English.isEnglish)
+        tweetText.foreach(println)
+        val trainSet = tweetText.flatMap(x => Twokenize.tokenize("^ "+x.toLowerCase+" $$").filterNot(_.startsWith("http"))).toList
+        val filterTrain = trainSet.sliding(2).flatMap{case List(p,q) => List(p+" "+q)}
+
+        // Make a Bigram Map of the offline tweets collected along with their probabilities
+        val normalizedNew = scala.io.Source.fromFile("src/main/resources/lang/eng/lexicon/twitterBigramfreq.txt").getLines
+          .flatMap(t => t.split("\t") match {
+            case Array(str1, str2) => Map(str1.toLowerCase -> str2.toDouble)
+          }) toMap
+
+        val normalizedMap = normalizedNew.toMap
+        val markovMap = filterTrain.toList.groupBy(x=>x).mapValues(x=>x.length.toDouble).toMap
+
+        val realSet = tweetText ++ userText
+        val realTrend = realSet.map{x => if(!x.contains(trending)) x+" "+trending else x}
+        val realTweets = realTrend.filterNot(x => (x=="" || x.contains("\n"))).sortBy(-_.length).distinct
+
+      // Combine all three models using weights
+      val finalMap = (markovMap /: userMap) {
+        case (map, (k,v)) => map + ( k -> (0.5*v + 0.5*map.getOrElse(k, 0.0)))
+      }
+
+      val compreMap = (normalizedMap /: finalMap) {
+        case (map, (k,v)) => map + ( k -> (0.80*v + 0.20*map.getOrElse(k, 0.0)))
+      }
+
+      // Generate 500 tweets using the aggregate model
+      var replySample = List[String]()
+      val now = System.nanoTime
+      var seconds = 0.0
+      var candidateCount = 0
+      while(seconds < 20) {
+        replySample = generateSentence(trending,compreMap,maxLength)::replySample
+        seconds = (System.nanoTime - now) / 1000000000
+        candidateCount +=1
+      }
+      //val replyList = Await.result(replySample, 20.seconds).asInstanceOf(List[String])
+      val genReply = replySample.map(x => postProcess(x)).filter(x => x.length < maxLength)
+      val sortReply = genReply.sortBy(-_.length).distinct
+
+      // Printing distinct generated candidate replies sorted by length
+      println("************************************")
+      sortReply.foreach(println)
+      println("************************************")
+
+      println(candidateCount)
+      // Load the classifier and run it on the generated candidate replies and
+      // print top 10 tweets
+      val classifier = NakContext.loadClassifier[FeaturizedClassifier[String,String]]("real_fake.obj")
+      val comparisons = for (ex <- sortReply) yield
+        classifier.evalRaw(ex)
+      val lengthFilter = sortReply.filter(x => ((x.length > 40 && x.length < maxLength) && (x.split("\\s+").toList.length > 3)))
+      val realIndex = classifier.labels.toList.indexOf("real")
+      val results = comparisons.map(x => x.toList)
+      val realList = results.map { x =>
+        if(realIndex == 0) (x(0)-x(1)) else (x(1)-x(0))
+      }
+      val predictResult = realList.zip(lengthFilter).sortBy(-_._1)
+      val topTen = predictResult.take(10)
+      for(i <- 0 to (topTen.size - 1))
+        println(topTen(i))
+      if(lengthFilter.length == 0)
+        Future{Seq(sortReply.head)}
+      else
+        Future{Seq(predictResult(0)._2)}
     }
   }
 
@@ -278,8 +419,8 @@ class GeoReplier extends BaseReplier {
         flag1 = true
       else
         newSentence = newSentence+" "+word(0)
-      println(symbol)
-      println(newSentence)
+      //println(symbol)
+      //println(newSentence)
     }
 
     if (!newSentence.contains(trending))
