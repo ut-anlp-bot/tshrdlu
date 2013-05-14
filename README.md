@@ -3,7 +3,7 @@
 
 Authors: **Jason Baldridge** (jasonbaldridge@gmail.com), Nazneen Rajani, Nick Wilson
 
-This is a repository for [project](https://github.com/utcompling/applied-nlp/wiki/Course-Project) related code for [Applied NLP course](https://github.com/utcompling/applied-nlp/wiki) being taught by [Jason Baldridge](http://www.jasonbaldridge.com) at [UT Austin](http://www.utexas.edu). It implements a Twitter bot.
+This is a repository for [project](https://github.com/utcompling/applied-nlp/wiki/Course-Project) related code for [Applied NLP course](https://github.com/utcompling/applied-nlp/wiki) being taught by [Jason Baldridge](http://www.jasonbaldridge.com) at [UT Austin](http://www.utexas.edu). It implements a Twitter bot original written by Jason Baldridge, extended by students in the course, and then customized by Nazneen and Nick for their course project.
 
 The name "tshrdlu" comes from Twitter+[SHRDLU](http://en.wikipedia.org/wiki/SHRDLU).
 
@@ -65,6 +65,16 @@ Documentation for SBT is at <http://www.scala-sbt.org/>
 Note: if you have SBT already installed on your system, you can
 also just call it directly with "sbt" in `TSHRDLU_DIR`.
 
+## Setting it up
+
+The bot must be configured with the authentication information for the Twitter
+user. The easiest way to do this is to create a `twitter4j.properties` file at
+the root of the source directory with the following contents:
+
+	oauth.consumerKey=<FILL THIS IN>
+	oauth.consumerSecret=<FILL THIS IN>
+	oauth.accessToken=<FILL THIS IN>
+	oauth.accessTokenSecret=<FILL THIS IN>
 
 ## Trying it out
 
@@ -75,3 +85,12 @@ Run the bot:
 When you tweet at the bot, it attempts to determine your location, select a
 Twitter trend based on your location, and then reply to you with a response
 automatically generated based on your own tweet history and the trending topic.
+
+To assist in testing, the bot accepts a command to set the screen name of any
+Twitter user as the target for user customization. The generated reply will still
+be sent to the user who tweets at the bot, but the reply will be customized
+based on the location of the configured user. To set the user, sent a tweet
+directed at the bot with text like so (replacing `billgates` with the
+desired screen name):
+
+	Set User: billgates
